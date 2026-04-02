@@ -1,0 +1,7 @@
+# Force LF line endings for all text files in this repo (WSL/Linux project)
+* text=auto eol=lf
+
+# Explicitly binary files
+*.png binary
+*.jpg binary
+*.db  binary
