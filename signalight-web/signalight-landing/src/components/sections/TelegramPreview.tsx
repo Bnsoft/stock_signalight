@@ -29,6 +29,8 @@ Next scan: 5 min`,
   },
 ]
 
+import { AnimateIn } from "@/components/layout/AnimateIn"
+
 const COMMANDS = ["/scan", "/price QQQ", "/signals", "/watchlist", "/add AAPL", "/report", "/help"]
 
 export function TelegramPreview() {
@@ -37,6 +39,7 @@ export function TelegramPreview() {
       <div className="max-w-6xl mx-auto">
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
           {/* Left */}
+          <AnimateIn from="left">
           <div>
             <span className="text-xs font-mono text-blue-400 uppercase tracking-widest mb-3 block">
               Telegram Bot
@@ -61,8 +64,10 @@ export function TelegramPreview() {
               ))}
             </div>
           </div>
+          </AnimateIn>
 
           {/* Right — Telegram UI mock */}
+          <AnimateIn from="right" delay={100}>
           <div className="max-w-sm mx-auto w-full">
             <div className="rounded-2xl border border-border bg-card overflow-hidden shadow-xl">
               {/* Chat header */}
@@ -107,6 +112,7 @@ export function TelegramPreview() {
               </div>
             </div>
           </div>
+          </AnimateIn>
         </div>
       </div>
     </section>

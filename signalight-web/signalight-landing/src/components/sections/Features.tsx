@@ -1,7 +1,6 @@
 import { Card, CardContent } from "@/components/ui/card"
-import {
-  Radio, Bell, BarChart2, Brain, ShieldCheck, RefreshCw,
-} from "lucide-react"
+import { Radio, Bell, BarChart2, Brain, ShieldCheck, RefreshCw } from "lucide-react"
+import { AnimateIn } from "@/components/layout/AnimateIn"
 
 const FEATURES = [
   {
@@ -45,37 +44,41 @@ const FEATURES = [
 
 export function Features() {
   return (
-    <section id="features" className="py-20 px-4 sm:px-6">
+    <section id="features" className="py-16 sm:py-20 px-4 sm:px-6">
       <div className="max-w-6xl mx-auto">
-        <div className="text-center mb-12">
-          <h2 className="text-3xl sm:text-4xl font-bold mb-4">
-            Everything you need to trade smarter
-          </h2>
-          <p className="text-muted-foreground text-lg max-w-xl mx-auto">
-            Built for ETF traders who want systematic signals without the noise.
-          </p>
-        </div>
+        <AnimateIn from="bottom">
+          <div className="text-center mb-10 sm:mb-12">
+            <h2 className="text-2xl sm:text-3xl lg:text-4xl font-bold mb-4">
+              Everything you need to trade smarter
+            </h2>
+            <p className="text-muted-foreground text-base sm:text-lg max-w-xl mx-auto">
+              Built for ETF traders who want systematic signals without the noise.
+            </p>
+          </div>
+        </AnimateIn>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {FEATURES.map((f) => {
+          {FEATURES.map((f, i) => {
             const Icon = f.icon
             return (
-              <Card key={f.title} className="bg-card border-border hover:border-border/80 transition-colors">
-                <CardContent className="p-6">
-                  <div className={`mb-4 ${f.color}`}>
-                    <Icon className="w-6 h-6" />
-                  </div>
-                  <div className="flex items-center gap-2 mb-2">
-                    <h3 className="font-semibold">{f.title}</h3>
-                    {f.badge && (
-                      <span className="text-xs px-1.5 py-0.5 rounded bg-muted text-muted-foreground">
-                        {f.badge}
-                      </span>
-                    )}
-                  </div>
-                  <p className="text-sm text-muted-foreground leading-relaxed">{f.desc}</p>
-                </CardContent>
-              </Card>
+              <AnimateIn key={f.title} from="bottom" delay={i * 60}>
+                <Card className="h-full bg-card border-border hover:border-border/60 transition-colors">
+                  <CardContent className="p-6 h-full flex flex-col">
+                    <div className={`mb-4 ${f.color}`}>
+                      <Icon className="w-6 h-6" />
+                    </div>
+                    <div className="flex items-center gap-2 mb-2">
+                      <h3 className="font-semibold">{f.title}</h3>
+                      {f.badge && (
+                        <span className="text-xs px-1.5 py-0.5 rounded bg-muted text-muted-foreground">
+                          {f.badge}
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-sm text-muted-foreground leading-relaxed">{f.desc}</p>
+                  </CardContent>
+                </Card>
+              </AnimateIn>
             )
           })}
         </div>

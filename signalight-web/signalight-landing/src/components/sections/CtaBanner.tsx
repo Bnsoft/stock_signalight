@@ -1,10 +1,12 @@
 import { Button } from "@/components/ui/button"
 import { ExternalLink } from "lucide-react"
+import { AnimateIn } from "@/components/layout/AnimateIn"
 
 export function CtaBanner() {
   return (
     <section className="py-20 px-4 sm:px-6">
       <div className="max-w-3xl mx-auto text-center">
+        <AnimateIn from="bottom">
         <div className="rounded-2xl border border-signal-green/20 bg-signal-green/5 p-12">
           <h2 className="text-3xl sm:text-4xl font-bold mb-4">
             Start monitoring your portfolio today.
@@ -24,6 +26,7 @@ export function CtaBanner() {
             </Button>
           </div>
         </div>
+        </AnimateIn>
       </div>
     </section>
   )
