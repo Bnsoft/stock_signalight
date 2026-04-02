@@ -10,6 +10,7 @@ const NAV_LINKS = [
   { label: "How it Works", href: "#how-it-works" },
   { label: "Strategy",     href: "#strategy" },
   { label: "Pricing",      href: "#pricing" },
+  { label: "DB Status",    href: "/test-supabase" },
 ]
 
 export function Header() {
