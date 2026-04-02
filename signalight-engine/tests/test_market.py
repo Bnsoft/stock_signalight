@@ -1,4 +1,3 @@
-import pytest
 import pandas as pd
 from src.market import fetch_daily_data, fetch_current_price, fetch_all_watchlist
 

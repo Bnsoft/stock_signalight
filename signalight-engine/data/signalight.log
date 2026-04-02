@@ -1,0 +1,6 @@
+2026-04-02 22:49:20  INFO      __main__ — DRY RUN mode — no alerts will be sent, no DB writes
+2026-04-02 22:49:20  INFO      __main__ — --once mode — single scan then exit
+2026-04-02 22:49:20  INFO      __main__ — Signalight engine starting...
+2026-04-02 22:49:20  INFO      src.store — Database initialised
+2026-04-02 22:49:23  INFO      __main__ — [DRY RUN] Scan complete — 7 symbols, 0 signal(s) found, no alerts sent
+2026-04-02 22:49:23  INFO      __main__ — --once complete: 0 signal(s) found

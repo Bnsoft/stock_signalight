@@ -1,5 +1,5 @@
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 import src.store as store_module
 from src.store import init_db, add_to_watchlist, save_signal
 

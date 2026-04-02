@@ -19,8 +19,8 @@ import os
 # ── make sure src/ is on the path ──────────────────────────────────────────
 sys.path.insert(0, os.path.dirname(__file__))
 
-from src.config import WATCHLIST, SIGNAL_CONFIG, DB_PATH
-from src.store import init_db, get_watchlist, get_recent_signals
+from src.config import SIGNAL_CONFIG, DB_PATH
+from src.store import init_db, get_watchlist
 from src.market import fetch_daily_data, fetch_current_price
 from src.pulse import get_all_indicators
 from src.trigger import evaluate_all_signals
@@ -117,7 +117,7 @@ def check_signals(all_indicators: dict[str, dict], force_rsi: bool = False) -> l
 
     if not triggered:
         print(f"  {INFO} No signals triggered under current market conditions")
-        print(f"       (run with --force-rsi to force RSI oversold signals)")
+        print("       (run with --force-rsi to force RSI oversold signals)")
 
     return triggered
 

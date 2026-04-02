@@ -1,8 +1,7 @@
 import logging
-from datetime import datetime, timezone
 from telegram import Update
 from telegram.ext import Application, CommandHandler, ContextTypes
-from src.config import TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, SIGNAL_CONFIG
+from src.config import TELEGRAM_CHAT_ID, SIGNAL_CONFIG
 from src.store import (
     get_watchlist,
     add_to_watchlist,
