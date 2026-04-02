@@ -35,26 +35,26 @@ export default function TestSupabase() {
     <div style={{ padding: '2rem', fontFamily: 'sans-serif' }}>
       <h1>Supabase Connection Test</h1>
       
-      {status === 'loading' && <p>⏳ 연결 확인 중...</p>}
+      {status === 'loading' && <p>⏳ Checking connection...</p>}
       
       {status === 'success' && (
         <div style={{ color: 'green' }}>
-          <p>✅ 연결 성공!</p>
-          <p>DB에서 읽어온 데이터 개수: {data.length}개</p>
+          <p>✅ Connection Successful!</p>
+          <p>Fetched {data.length} records from database.</p>
           <pre>{JSON.stringify(data, null, 2)}</pre>
         </div>
       )}
 
       {status === 'error' && (
         <div style={{ color: 'red' }}>
-          <p>❌ 연결 실패</p>
-          <p>에러 메시지: {errorMsg}</p>
-          <p>Vercel의 환경변수(NEXT_PUBLIC_...) 설정을 다시 확인해 주세요.</p>
+          <p>❌ Connection Failed</p>
+          <p>Error: {errorMsg}</p>
+          <p>Please double-check your Vercel Environment Variables (NEXT_PUBLIC_...).</p>
         </div>
       )}
 
       <hr />
-      <p><a href="/">홈으로 돌아가기</a></p>
+      <p><a href="/">Back to Home</a></p>
     </div>
   )
 }
