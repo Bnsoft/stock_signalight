@@ -5,15 +5,15 @@ Web Dashboard로 실시간 신호 + 차트 + 인디케이터 시각화. Group별
 
 ---
 
-## **G1: Dashboard Layout + Chart Setup**
+## **G1: Dashboard Layout + Chart Setup** ✅
 기본 레이아웃 + TradingView Lightweight Charts 초기화
 
-- [ ] Next.js 페이지 구조 (`/dashboard` 경로)
-- [ ] 레이아웃 구성 (좌: 신호피드, 우: 차트, 하단: 지표)
-- [ ] TradingView Lightweight Charts 라이브러리 설치 + 기본 설정
-- [ ] 더미 캔들 데이터로 차트 렌더링 테스트
-- [ ] Tailwind 스타일링 (다크/라이트 테마 적용)
-- [ ] Build 확인 + Push
+- [x] Next.js 페이지 구조 (`/dashboard` 경로)
+- [x] 레이아웃 구성 (좌: 신호피드, 우: 차트, 하단: 지표)
+- [x] TradingView Lightweight Charts 라이브러리 설치 + 기본 설정
+- [x] 더미 캔들 데이터로 차트 렌더링 테스트
+- [x] Tailwind 스타일링 (다크/라이트 테마 적용)
+- [x] Build 확인 + Push
 
 ---
 
@@ -102,7 +102,7 @@ WebSocket 실시간 업데이트 + PWA + 최종 폴리시
 
 | Group | Status | Notes |
 |-------|--------|-------|
-| G1 | ⬜ Pending | Layout + Lightweight Charts |
+| G1 | ✅ Done | Layout + Lightweight Charts (MA20/MA60, Volume bars) |
 | G2 | ⬜ Pending | API + Signal Feed |
 | G3 | ⬜ Pending | VWAP, Stochastic, ATR, ADX |
 | G4 | ⬜ Pending | OBV, Ichimoku, Support/Resistance |
