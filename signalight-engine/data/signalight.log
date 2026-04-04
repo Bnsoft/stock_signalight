@@ -21154,3 +21154,10 @@ telegram.error.NetworkError: Bad Gateway
 2026-04-05 04:58:12  INFO      httpx — HTTP Request: POST https://api.telegram.org/bot8778355904:AAFmP4lt9YJUqYSkF64bBUJdBmoFC_jFsUE/getUpdates "HTTP/1.1 200 OK"
 2026-04-05 04:58:22  INFO      httpx — HTTP Request: POST https://api.telegram.org/bot8778355904:AAFmP4lt9YJUqYSkF64bBUJdBmoFC_jFsUE/getUpdates "HTTP/1.1 200 OK"
 2026-04-05 04:58:33  INFO      httpx — HTTP Request: POST https://api.telegram.org/bot8778355904:AAFmP4lt9YJUqYSkF64bBUJdBmoFC_jFsUE/getUpdates "HTTP/1.1 200 OK"
+2026-04-05 04:58:43  INFO      httpx — HTTP Request: POST https://api.telegram.org/bot8778355904:AAFmP4lt9YJUqYSkF64bBUJdBmoFC_jFsUE/getUpdates "HTTP/1.1 200 OK"
+2026-04-05 04:58:52  INFO      apscheduler.executors.default — Running job "scanner (trigger: interval[0:05:00], next run at: 2026-04-04 19:03:52 UTC)" (scheduled at 2026-04-04 18:58:52.103989+00:00)
+2026-04-05 04:58:52  INFO      __main__ — Market closed — scan skipped
+2026-04-05 04:58:52  INFO      apscheduler.executors.default — Job "scanner (trigger: interval[0:05:00], next run at: 2026-04-04 19:03:52 UTC)" executed successfully
+2026-04-05 04:58:53  INFO      httpx — HTTP Request: POST https://api.telegram.org/bot8778355904:AAFmP4lt9YJUqYSkF64bBUJdBmoFC_jFsUE/getUpdates "HTTP/1.1 200 OK"
+2026-04-05 04:59:04  INFO      httpx — HTTP Request: POST https://api.telegram.org/bot8778355904:AAFmP4lt9YJUqYSkF64bBUJdBmoFC_jFsUE/getUpdates "HTTP/1.1 200 OK"
+2026-04-05 04:59:14  INFO      httpx — HTTP Request: POST https://api.telegram.org/bot8778355904:AAFmP4lt9YJUqYSkF64bBUJdBmoFC_jFsUE/getUpdates "HTTP/1.1 200 OK"
