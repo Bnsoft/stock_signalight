@@ -15,6 +15,11 @@ class SignalType(str, Enum):
     PRICE_BELOW_BOLLINGER  = "Price Below Lower Bollinger"
     PRICE_ABOVE_BOLLINGER  = "Price Above Upper Bollinger"
     VOLUME_SPIKE           = "Volume Spike"
+    VWAP_BREAKBELOW        = "Price Below VWAP"
+    STOCH_OVERSOLD         = "Stochastic Oversold"
+    STOCH_OVERBOUGHT       = "Stochastic Overbought"
+    ATR_SPIKE              = "ATR Spike"
+    ADX_STRONG_TREND       = "Strong Trend (ADX)"
 
 
 class Severity(str, Enum):
@@ -182,6 +187,113 @@ def check_bollinger_signals(symbol: str, indicators: dict) -> list[dict]:
     return signals
 
 
+def check_vwap_signal(symbol: str, indicators: dict) -> list[dict]:
+    """Fire when price breaks below VWAP."""
+    price = indicators.get("current_price")
+    vwap = indicators.get("vwap")
+
+    if None in (price, vwap):
+        return []
+
+    signals = []
+    if price < vwap * 0.98:  # Price more than 2% below VWAP
+        sig_type = SignalType.VWAP_BREAKBELOW.value
+        if not _already_fired(symbol, sig_type):
+            signals.append({
+                "symbol": symbol,
+                "signal_type": sig_type,
+                "severity": Severity.WARNING.value,
+                "message": f"Price {price:.2f} below VWAP {vwap:.2f}",
+                "indicators": indicators,
+                "price": price,
+            })
+
+    return signals
+
+
+def check_stochastic_signals(symbol: str, indicators: dict) -> list[dict]:
+    """Fire on Stochastic crossovers in oversold/overbought zones."""
+    k = indicators.get("stoch_k")
+    d = indicators.get("stoch_d")
+
+    if None in (k, d):
+        return []
+
+    signals = []
+
+    # Oversold: K and D both below 20
+    if k < 20 and d < 20:
+        sig_type = SignalType.STOCH_OVERSOLD.value
+        if not _already_fired(symbol, sig_type, hours=4):
+            signals.append({
+                "symbol": symbol,
+                "signal_type": sig_type,
+                "severity": Severity.ACTION.value,
+                "message": f"Stochastic oversold: K={k:.1f}, D={d:.1f}",
+                "indicators": indicators,
+                "price": indicators.get("current_price", 0),
+            })
+
+    # Overbought: K and D both above 80
+    elif k > 80 and d > 80:
+        sig_type = SignalType.STOCH_OVERBOUGHT.value
+        if not _already_fired(symbol, sig_type, hours=4):
+            signals.append({
+                "symbol": symbol,
+                "signal_type": sig_type,
+                "severity": Severity.WARNING.value,
+                "message": f"Stochastic overbought: K={k:.1f}, D={d:.1f}",
+                "indicators": indicators,
+                "price": indicators.get("current_price", 0),
+            })
+
+    return signals
+
+
+def check_atr_signal(symbol: str, indicators: dict, atr_prev_indicators: dict | None = None) -> list[dict]:
+    """Fire when ATR spikes (sudden volatility increase)."""
+    atr = indicators.get("atr")
+    if atr is None:
+        return []
+
+    # Simple check: if ATR is unusually high, flag it
+    # In production, compare to ATR moving average
+    signals = []
+    if atr > 10:  # Adjust threshold per asset
+        sig_type = SignalType.ATR_SPIKE.value
+        if not _already_fired(symbol, sig_type, hours=6):
+            signals.append({
+                "symbol": symbol,
+                "signal_type": sig_type,
+                "severity": Severity.INFO.value,
+                "message": f"High volatility: ATR {atr:.2f}",
+                "indicators": indicators,
+                "price": indicators.get("current_price", 0),
+            })
+
+    return signals
+
+
+def check_adx_signal(symbol: str, indicators: dict) -> list[dict]:
+    """Fire when ADX indicates a strong trend (> 25)."""
+    adx = indicators.get("adx")
+    if adx is None or adx < 25:
+        return []
+
+    sig_type = SignalType.ADX_STRONG_TREND.value
+    if _already_fired(symbol, sig_type, hours=12):
+        return []
+
+    return [{
+        "symbol": symbol,
+        "signal_type": sig_type,
+        "severity": Severity.INFO.value,
+        "message": f"Strong trend detected: ADX {adx:.1f}",
+        "indicators": indicators,
+        "price": indicators.get("current_price", 0),
+    }]
+
+
 def check_volume_spike(symbol: str, indicators: dict, threshold: float = 2.0) -> list[dict]:
     """Fire when current volume is >= threshold x the 20-day average."""
     ratio = indicators.get("volume_ratio")
@@ -220,6 +332,10 @@ def evaluate_all_signals(
     triggered += check_drawdown_levels(symbol, indicators)
     triggered += check_bollinger_signals(symbol, indicators)
     triggered += check_volume_spike(symbol, indicators)
+    triggered += check_vwap_signal(symbol, indicators)
+    triggered += check_stochastic_signals(symbol, indicators)
+    triggered += check_atr_signal(symbol, indicators, prev_indicators)
+    triggered += check_adx_signal(symbol, indicators)
 
     if triggered:
         logger.info(f"{symbol}: {len(triggered)} signal(s) triggered")

@@ -1,8 +1,8 @@
 import logging
 import pandas as pd
-from ta.momentum import RSIIndicator
-from ta.trend import MACD, SMAIndicator, EMAIndicator
-from ta.volatility import BollingerBands
+from ta.momentum import RSIIndicator, StochasticOscillator
+from ta.trend import MACD, SMAIndicator, EMAIndicator, ADXIndicator
+from ta.volatility import BollingerBands, AverageTrueRange
 from src.config import SIGNAL_CONFIG
 
 logger = logging.getLogger(__name__)
@@ -80,6 +80,52 @@ def calculate_drawdown(df: pd.DataFrame) -> dict | None:
     }
 
 
+def calculate_vwap(df: pd.DataFrame) -> float | None:
+    """VWAP (Volume Weighted Average Price)."""
+    if "volume" not in df.columns or df.empty:
+        return None
+    df_copy = df.copy()
+    df_copy["hl2"] = (df_copy["high"] + df_copy["low"]) / 2
+    df_copy["vwap"] = (df_copy["hl2"] * df_copy["volume"]).cumsum() / df_copy["volume"].cumsum()
+    vwap = float(df_copy["vwap"].iloc[-1])
+    return round(vwap, 4) if pd.notna(vwap) else None
+
+
+def calculate_stochastic(df: pd.DataFrame, period: int = 14, smooth: int = 3) -> dict | None:
+    """Stochastic Oscillator (%K and %D)."""
+    if len(df) < period:
+        return None
+    stoch = StochasticOscillator(
+        high=df["high"], low=df["low"], close=df["close"], window=period, smooth_window=smooth
+    )
+    k_val = stoch.stoch().iloc[-1]
+    d_val = stoch.stoch_signal().iloc[-1]
+    if pd.isna(k_val) or pd.isna(d_val):
+        return None
+    return {
+        "stoch_k": round(float(k_val), 2),
+        "stoch_d": round(float(d_val), 2),
+    }
+
+
+def calculate_atr(df: pd.DataFrame, period: int = 14) -> float | None:
+    """ATR (Average True Range)."""
+    if len(df) < period:
+        return None
+    atr = AverageTrueRange(high=df["high"], low=df["low"], close=df["close"], window=period)
+    val = atr.average_true_range().iloc[-1]
+    return round(float(val), 4) if pd.notna(val) else None
+
+
+def calculate_adx(df: pd.DataFrame, period: int = 14) -> float | None:
+    """ADX (Average Directional Index) — trend strength (0–100)."""
+    if len(df) < period * 2:
+        return None
+    adx = ADXIndicator(high=df["high"], low=df["low"], close=df["close"], window=period)
+    val = adx.adx().iloc[-1]
+    return round(float(val), 2) if pd.notna(val) else None
+
+
 def calculate_volume_analysis(df: pd.DataFrame, period: int = 20) -> dict | None:
     """Volume analysis: current vs average, and ratio."""
     if "volume" not in df.columns or len(df) < period:
@@ -114,6 +160,7 @@ def get_all_indicators(df: pd.DataFrame) -> dict:
     bb_data = calculate_bollinger_bands(df) or {}
     dd_data = calculate_drawdown(df) or {}
     vol_data = calculate_volume_analysis(df) or {}
+    stoch_data = calculate_stochastic(df) or {}
 
     return {
         "current_price": current_price,
@@ -127,5 +174,10 @@ def get_all_indicators(df: pd.DataFrame) -> dict:
         "bollinger_lower": bb_data.get("bollinger_lower"),
         "drawdown_pct": dd_data.get("drawdown_pct"),
         "ath": dd_data.get("ath"),
+        "vwap": calculate_vwap(df),
+        "stoch_k": stoch_data.get("stoch_k"),
+        "stoch_d": stoch_data.get("stoch_d"),
+        "atr": calculate_atr(df),
+        "adx": calculate_adx(df),
         **vol_data,
     }

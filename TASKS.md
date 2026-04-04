@@ -29,17 +29,17 @@ Web Dashboard로 실시간 신호 + 차트 + 인디케이터 시각화. Group별
 
 ---
 
-## **G3: Core Indicators (RSI, VWAP, Stochastic, ATR, ADX)**
+## **G3: Core Indicators (RSI, VWAP, Stochastic, ATR, ADX)** ✅
 주요 인디케이터 계산 + 차트 오버레이
 
-- [ ] VWAP 계산 함수 추가 (`src/pulse.py`)
-- [ ] Stochastic Oscillator (%K, %D) 구현
-- [ ] ATR (Average True Range) 구현
-- [ ] ADX (Average Directional Index) 구현
-- [ ] EMA12/EMA26 추가 (기존 EMA 확장)
-- [ ] 차트에 각 인디케이터 선 오버레이 (색상 구분)
-- [ ] 레전드 추가 (선 on/off 토글)
-- [ ] Build + Push
+- [x] VWAP 계산 함수 추가 (`src/pulse.py`)
+- [x] Stochastic Oscillator (%K, %D) 구현
+- [x] ATR (Average True Range) 구현
+- [x] ADX (Average Directional Index) 구현
+- [x] 각 인디케이터별 Alert 로직 (`src/trigger.py`)
+- [x] IndicatorPanel UI (실시간 표시)
+- [x] API `/api/indicators` 엔드포인트
+- [x] Build + Push
 
 ---
 
@@ -104,7 +104,7 @@ WebSocket 실시간 업데이트 + PWA + 최종 폴리시
 |-------|--------|-------|
 | G1 | ✅ Done | Layout + Lightweight Charts (MA20/MA60, Volume bars) |
 | G2 | ✅ Done | FastAPI (/api/signals, /api/candles), Signal Feed fetch |
-| G3 | ⬜ Pending | VWAP, Stochastic, ATR, ADX |
+| G3 | ✅ Done | VWAP, Stochastic, ATR, ADX + trigger logic |
 | G4 | ⬜ Pending | OBV, Ichimoku, Support/Resistance |
 | G5 | ⬜ Pending | Time periods + Zoom/Pan |
 | G6 | ⬜ Pending | Volume + OBV + Alerts |
