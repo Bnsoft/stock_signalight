@@ -77,9 +77,62 @@ def init_db() -> None:
                 signals_found   INTEGER,
                 errors          TEXT
             );
+
+            CREATE TABLE IF NOT EXISTS signal_performance (
+                id              INTEGER PRIMARY KEY AUTOINCREMENT,
+                signal_id       INTEGER NOT NULL,
+                signal_type     TEXT    NOT NULL,
+                symbol          TEXT    NOT NULL,
+                entry_price     REAL,
+                exit_price      REAL,
+                entry_time      DATETIME,
+                exit_time       DATETIME,
+                pnl             REAL,
+                roi_percent     REAL,
+                status          TEXT DEFAULT 'PENDING',
+                created_at      DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (signal_id) REFERENCES signals(id)
+            );
+
+            CREATE TABLE IF NOT EXISTS indicator_accuracy (
+                id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+                indicator_name      TEXT    NOT NULL,
+                symbol              TEXT,
+                total_signals       INTEGER DEFAULT 0,
+                winning_signals     INTEGER DEFAULT 0,
+                losing_signals      INTEGER DEFAULT 0,
+                win_rate_percent    REAL,
+                avg_roi_percent     REAL,
+                max_gain_percent    REAL,
+                max_loss_percent    REAL,
+                last_updated        DATETIME DEFAULT CURRENT_TIMESTAMP
+            );
+
+            CREATE TABLE IF NOT EXISTS backtest_results (
+                id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+                symbol              TEXT    NOT NULL,
+                start_date          DATE,
+                end_date            DATE,
+                initial_capital     REAL,
+                final_capital       REAL,
+                total_trades        INTEGER,
+                winning_trades      INTEGER,
+                losing_trades       INTEGER,
+                win_rate_percent    REAL,
+                total_roi_percent   REAL,
+                max_drawdown_percent REAL,
+                sharpe_ratio        REAL,
+                results_json        TEXT,
+                created_at          DATETIME DEFAULT CURRENT_TIMESTAMP
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_signals_symbol_type ON signals(symbol, signal_type);
+            CREATE INDEX IF NOT EXISTS idx_signal_perf_status ON signal_performance(status);
+            CREATE INDEX IF NOT EXISTS idx_indicator_acc_name ON indicator_accuracy(indicator_name);
+            CREATE INDEX IF NOT EXISTS idx_backtest_symbol ON backtest_results(symbol);
         """)
     _seed_watchlist()
-    logger.info("SQLite database initialised")
+    logger.info("SQLite database initialised with analytics tables")
 
 
 def _seed_watchlist() -> None:
@@ -360,3 +413,143 @@ def get_config_value(key: str, default=None):
         except Exception as e:
             logger.warning(f"Config read failed for '{key}': {e}")
     return default
+
+
+# ------------------------------------------------------------------ #
+#  Signal Performance & Analytics                                    #
+# ------------------------------------------------------------------ #
+
+def save_signal_performance(
+    signal_id: int,
+    signal_type: str,
+    symbol: str,
+    entry_price: float,
+    exit_price: float | None = None,
+    status: str = "PENDING",
+) -> None:
+    """Save signal performance record."""
+    entry_time = datetime.utcnow()
+    roi = None
+    if exit_price and entry_price > 0:
+        roi = ((exit_price - entry_price) / entry_price) * 100
+
+    with _connect() as conn:
+        conn.execute(
+            """INSERT INTO signal_performance
+               (signal_id, signal_type, symbol, entry_price, exit_price, entry_time, roi_percent, status)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+            (signal_id, signal_type, symbol, entry_price, exit_price, entry_time, roi, status),
+        )
+    logger.info(f"Saved signal performance for {symbol} {signal_type}")
+
+
+def get_signal_performance_stats(symbol: str | None = None) -> dict:
+    """Get performance stats for signals (all or by symbol)."""
+    with _connect() as conn:
+        query = "SELECT signal_type, COUNT(*) as total, SUM(CASE WHEN roi_percent > 0 THEN 1 ELSE 0 END) as wins FROM signal_performance WHERE status != 'PENDING'"
+        params = []
+
+        if symbol:
+            query += " AND symbol = ?"
+            params.append(symbol)
+
+        query += " GROUP BY signal_type"
+        cursor = conn.execute(query, params)
+        rows = cursor.fetchall()
+
+        stats = {}
+        for row in rows:
+            sig_type = row[0]
+            total = row[1]
+            wins = row[2] or 0
+            win_rate = (wins / total * 100) if total > 0 else 0
+
+            stats[sig_type] = {
+                "total": total,
+                "wins": wins,
+                "losses": total - wins,
+                "win_rate": round(win_rate, 2),
+            }
+
+        return stats
+
+
+def save_indicator_accuracy(
+    indicator_name: str,
+    symbol: str | None = None,
+    total_signals: int = 0,
+    winning_signals: int = 0,
+    losing_signals: int = 0,
+) -> None:
+    """Update indicator accuracy metrics."""
+    win_rate = (winning_signals / total_signals * 100) if total_signals > 0 else 0
+
+    with _connect() as conn:
+        conn.execute(
+            """INSERT OR REPLACE INTO indicator_accuracy
+               (indicator_name, symbol, total_signals, winning_signals, losing_signals, win_rate_percent)
+               VALUES (?, ?, ?, ?, ?, ?)""",
+            (indicator_name, symbol, total_signals, winning_signals, losing_signals, win_rate),
+        )
+
+
+def get_indicator_accuracy(indicator_name: str | None = None) -> list[dict]:
+    """Get indicator accuracy stats."""
+    with _connect() as conn:
+        query = "SELECT indicator_name, symbol, total_signals, winning_signals, win_rate_percent FROM indicator_accuracy WHERE 1=1"
+        params = []
+
+        if indicator_name:
+            query += " AND indicator_name = ?"
+            params.append(indicator_name)
+
+        cursor = conn.execute(query, params)
+        return [dict(row) for row in cursor.fetchall()]
+
+
+def save_backtest_result(
+    symbol: str,
+    start_date: str,
+    end_date: str,
+    initial_capital: float,
+    final_capital: float,
+    total_trades: int,
+    winning_trades: int,
+    total_roi_percent: float,
+    max_drawdown_percent: float,
+    sharpe_ratio: float = 0,
+    results_json: str = "{}",
+) -> None:
+    """Save backtest result."""
+    losing_trades = total_trades - winning_trades
+    win_rate = (winning_trades / total_trades * 100) if total_trades > 0 else 0
+
+    with _connect() as conn:
+        conn.execute(
+            """INSERT INTO backtest_results
+               (symbol, start_date, end_date, initial_capital, final_capital, total_trades,
+                winning_trades, losing_trades, win_rate_percent, total_roi_percent, max_drawdown_percent, sharpe_ratio, results_json)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (
+                symbol, start_date, end_date, initial_capital, final_capital, total_trades,
+                winning_trades, losing_trades, win_rate, total_roi_percent, max_drawdown_percent, sharpe_ratio, results_json,
+            ),
+        )
+    logger.info(f"Saved backtest result for {symbol} {start_date}~{end_date}")
+
+
+def get_backtest_results(symbol: str | None = None, limit: int = 10) -> list[dict]:
+    """Get recent backtest results."""
+    with _connect() as conn:
+        query = "SELECT * FROM backtest_results WHERE 1=1"
+        params = []
+
+        if symbol:
+            query += " AND symbol = ?"
+            params.append(symbol)
+
+        query += " ORDER BY created_at DESC LIMIT ?"
+        params.append(limit)
+
+        cursor = conn.execute(query, params)
+        return [dict(row) for row in cursor.fetchall()]

@@ -228,3 +228,43 @@ async def broadcast_signal(signal: dict):
             await client.send_json({"new_signal": signal})
         except Exception:
             pass
+
+
+@app.get("/api/signal-stats")
+async def get_signal_stats(symbol: Optional[str] = None):
+    """신호별 성과 통계 조회"""
+    try:
+        stats = db_store.get_signal_performance_stats(symbol)
+
+        # 딕셔너리를 리스트로 변환
+        stats_list = [
+            {
+                "signal_type": sig_type,
+                **values
+            }
+            for sig_type, values in stats.items()
+        ]
+
+        return {"stats": stats_list}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/indicator-stats")
+async def get_indicator_stats(indicator_name: Optional[str] = None):
+    """인디케이터별 정확도 조회"""
+    try:
+        stats = db_store.get_indicator_accuracy(indicator_name)
+        return {"stats": stats}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/backtest-results")
+async def get_backtest_results(symbol: Optional[str] = None, limit: int = 10):
+    """백테스트 결과 조회"""
+    try:
+        results = db_store.get_backtest_results(symbol, limit)
+        return {"results": results, "count": len(results)}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
