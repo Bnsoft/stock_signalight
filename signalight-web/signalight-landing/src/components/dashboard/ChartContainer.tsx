@@ -8,7 +8,8 @@ interface ChartContainerProps {
   period: string
 }
 
-// 더미 캔들 데이터
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"
+
 function generateDummyCandles(count: number = 60) {
   const candles = []
   let time = Math.floor(Date.now() / 1000) - count * 86400
@@ -56,81 +57,101 @@ export function ChartContainer({ symbol, period }: ChartContainerProps) {
   useEffect(() => {
     if (!chartContainer.current) return
 
-    const candles = generateDummyCandles(60)
-    const ma20 = calculateMA(candles, 20)
-    const ma60 = calculateMA(candles, 60)
+    const fetchAndRender = async () => {
+      let candles: any[] = []
 
-    const chart: any = createChart(chartContainer.current, {
-      layout: {
-        background: { type: ColorType.Solid, color: "transparent" },
-        textColor: "#9ca3af",
-      },
-      timeScale: {
-        timeVisible: true,
-        secondsVisible: false,
-      },
-      width: chartContainer.current.clientWidth,
-      height: chartContainer.current.clientHeight,
-    })
+      try {
+        const res = await fetch(
+          `${API_BASE}/api/candles?symbol=${symbol}&period=${period}&limit=60`
+        )
+        if (res.ok) {
+          const data = await res.json()
+          candles = data.candles
+        } else {
+          candles = generateDummyCandles(60)
+        }
+      } catch (err) {
+        candles = generateDummyCandles(60)
+      }
 
-    // Candlestick series
-    const candlestickSeries = chart.addCandlestickSeries({
-      upColor: "#10b981",
-      downColor: "#ef4444",
-      borderUpColor: "#10b981",
-      borderDownColor: "#ef4444",
-      wickUpColor: "#10b981",
-      wickDownColor: "#ef4444",
-    })
-    candlestickSeries.setData(candles)
+      if (candles.length === 0) return
 
-    // MA20
-    const ma20Series = chart.addLineSeries({
-      color: "#3b82f6",
-      lineWidth: 1,
-    })
-    ma20Series.setData(ma20.filter((m) => m !== null) as any[])
+      const ma20 = calculateMA(candles, 20)
+      const ma60 = calculateMA(candles, 60)
 
-    // MA60
-    const ma60Series = chart.addLineSeries({
-      color: "#f59e0b",
-      lineWidth: 1,
-    })
-    ma60Series.setData(ma60.filter((m) => m !== null) as any[])
+      const chart: any = createChart(chartContainer.current as HTMLElement, {
+        layout: {
+          background: { type: ColorType.Solid, color: "transparent" },
+          textColor: "#9ca3af",
+        },
+        timeScale: {
+          timeVisible: true,
+          secondsVisible: false,
+        },
+        width: chartContainer.current?.clientWidth || 1000,
+        height: chartContainer.current?.clientHeight || 400,
+      })
 
-    // Volume
-    const volumeSeries = chart.addHistogramSeries({
-      color: "#6b7280",
-      priceFormat: {
-        type: "volume",
-      },
-    })
-    const volumeData = candles.map((c) => ({
-      time: c.time,
-      value: c.volume,
-      color: c.close >= c.open ? "#10b98133" : "#ef444433",
-    }))
-    volumeSeries.setData(volumeData)
+      // Candlestick series
+      const candlestickSeries = chart.addCandlestickSeries({
+        upColor: "#10b981",
+        downColor: "#ef4444",
+        borderUpColor: "#10b981",
+        borderDownColor: "#ef4444",
+        wickUpColor: "#10b981",
+        wickDownColor: "#ef4444",
+      })
+      candlestickSeries.setData(candles)
 
-    chart.timeScale().fitContent()
+      // MA20
+      const ma20Series = chart.addLineSeries({
+        color: "#3b82f6",
+        lineWidth: 1,
+      })
+      ma20Series.setData(ma20.filter((m) => m !== null) as any[])
 
-    // 윈도우 리사이즈 시 차트 크기 조정
-    const handleResize = () => {
-      if (chartContainer.current) {
-        chart.applyOptions({
-          width: chartContainer.current.clientWidth,
-          height: chartContainer.current.clientHeight,
-        })
-        chart.timeScale().fitContent()
+      // MA60
+      const ma60Series = chart.addLineSeries({
+        color: "#f59e0b",
+        lineWidth: 1,
+      })
+      ma60Series.setData(ma60.filter((m) => m !== null) as any[])
+
+      // Volume
+      const volumeSeries = chart.addHistogramSeries({
+        color: "#6b7280",
+        priceFormat: {
+          type: "volume",
+        },
+      })
+      const volumeData = candles.map((c) => ({
+        time: c.time,
+        value: c.volume,
+        color: c.close >= c.open ? "#10b98133" : "#ef444433",
+      }))
+      volumeSeries.setData(volumeData)
+
+      chart.timeScale().fitContent()
+
+      const handleResize = () => {
+        if (chartContainer.current) {
+          chart.applyOptions({
+            width: chartContainer.current.clientWidth,
+            height: chartContainer.current.clientHeight,
+          })
+          chart.timeScale().fitContent()
+        }
+      }
+
+      window.addEventListener("resize", handleResize)
+
+      return () => {
+        window.removeEventListener("resize", handleResize)
+        chart.remove()
       }
     }
 
-    window.addEventListener("resize", handleResize)
-
-    return () => {
-      window.removeEventListener("resize", handleResize)
-      chart.remove()
-    }
+    fetchAndRender()
   }, [symbol, period])
 
   return (

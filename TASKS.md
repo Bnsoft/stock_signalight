@@ -17,15 +17,15 @@ Web Dashboard로 실시간 신호 + 차트 + 인디케이터 시각화. Group별
 
 ---
 
-## **G2: Signal Feed UI + Python API 연결**
+## **G2: Signal Feed UI + Python API 연결** ✅
 신호 목록 UI + Python 엔진과 API 연동
 
-- [ ] Signal Feed UI 컴포넌트 (리스트, 시간, 심볼, 신호타입, 심각도)
-- [ ] Python FastAPI 추가 (`/api/signals` 엔드포인트)
-- [ ] DB에서 신호 조회 (최근 100개)
-- [ ] REST API 호출로 신호 fetch
-- [ ] 신호 필터링 (심볼별, 신호타입별, 시간범위)
-- [ ] Build + Push
+- [x] Signal Feed UI 컴포넌트 (리스트, 시간, 심볼, 신호타입, 심각도)
+- [x] Python FastAPI 추가 (`/api/signals` 엔드포인트)
+- [x] DB에서 신호 조회 (최근 100개)
+- [x] REST API 호출로 신호 fetch
+- [x] 신호 필터링 (심볼별, 신호타입별)
+- [x] Build + Push
 
 ---
 
@@ -103,7 +103,7 @@ WebSocket 실시간 업데이트 + PWA + 최종 폴리시
 | Group | Status | Notes |
 |-------|--------|-------|
 | G1 | ✅ Done | Layout + Lightweight Charts (MA20/MA60, Volume bars) |
-| G2 | ⬜ Pending | API + Signal Feed |
+| G2 | ✅ Done | FastAPI (/api/signals, /api/candles), Signal Feed fetch |
 | G3 | ⬜ Pending | VWAP, Stochastic, ATR, ADX |
 | G4 | ⬜ Pending | OBV, Ichimoku, Support/Resistance |
 | G5 | ⬜ Pending | Time periods + Zoom/Pan |

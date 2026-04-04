@@ -6,12 +6,14 @@ readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "aiosqlite>=0.22.1",
+    "fastapi>=0.135.3",
     "pandas>=3.0.2",
     "psycopg2-binary>=2.9.0",
     "python-dotenv>=1.2.2",
     "python-telegram-bot[job-queue]>=22.7",
     "supabase>=2.15.0",
     "ta>=0.11.0",
+    "uvicorn[standard]>=0.42.0",
     "yfinance>=1.2.0",
 ]
 

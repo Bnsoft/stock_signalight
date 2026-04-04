@@ -50,12 +50,41 @@ const TYPE_EMOJI: Record<string, string> = {
   INFO: "ℹ️",
 }
 
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"
+
 export function SignalFeed() {
   const [signals, setSignals] = useState<Signal[]>(MOCK_SIGNALS)
+  const [loading, setLoading] = useState(false)
 
   useEffect(() => {
-    // TODO: WebSocket이나 polling으로 실시간 신호 받기
-    // /api/signals 엔드포인트에서 fetch
+    const fetchSignals = async () => {
+      setLoading(true)
+      try {
+        const res = await fetch(`${API_BASE}/api/signals?limit=50`)
+        if (res.ok) {
+          const data = await res.json()
+          const formattedSignals = data.signals.map((s: any) => ({
+            id: s.id.toString(),
+            timestamp: s.timestamp,
+            symbol: s.symbol,
+            type: s.severity || "INFO",
+            title: s.signal_type,
+            details: s.message,
+          }))
+          setSignals(formattedSignals)
+        }
+      } catch (err) {
+        // API 불가능시 더미 데이터 사용
+        console.log("Using mock signals (API unavailable)")
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchSignals()
+    // 10초마다 새로운 신호 확인
+    const interval = setInterval(fetchSignals, 10000)
+    return () => clearInterval(interval)
   }, [])
 
   const formatTime = (isoString: string) => {
