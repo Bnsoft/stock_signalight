@@ -268,3 +268,19 @@ async def get_backtest_results(symbol: Optional[str] = None, limit: int = 10):
         return {"results": results, "count": len(results)}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/backtest-run")
+async def run_backtest(symbol: str, days: int = 90):
+    """새로운 백테스트 실행"""
+    from .backtest import simple_backtest
+
+    try:
+        result = simple_backtest(symbol, days)
+        if "error" in result:
+            raise HTTPException(status_code=400, detail=result["error"])
+
+        return result
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
