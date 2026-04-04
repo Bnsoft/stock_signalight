@@ -126,10 +126,52 @@ def init_db() -> None:
                 created_at          DATETIME DEFAULT CURRENT_TIMESTAMP
             );
 
+            CREATE TABLE IF NOT EXISTS users (
+                id                 TEXT PRIMARY KEY,
+                email              TEXT UNIQUE,
+                display_name       TEXT,
+                auth_method        TEXT DEFAULT 'guest',
+                password_hash      TEXT,
+                created_at         DATETIME DEFAULT CURRENT_TIMESTAMP,
+                updated_at         DATETIME DEFAULT CURRENT_TIMESTAMP
+            );
+
+            CREATE TABLE IF NOT EXISTS user_preferences (
+                id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id            TEXT    NOT NULL,
+                theme              TEXT DEFAULT 'system',
+                notification_email BOOLEAN DEFAULT 1,
+                api_calls_limit    INTEGER DEFAULT 1000,
+                subscription_plan  TEXT DEFAULT 'guest',
+                created_at         DATETIME DEFAULT CURRENT_TIMESTAMP,
+                updated_at         DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users(id)
+            );
+
+            CREATE TABLE IF NOT EXISTS calculations (
+                id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id            TEXT    NOT NULL,
+                principal          REAL    NOT NULL,
+                period_months      INTEGER NOT NULL,
+                target_roi         REAL    NOT NULL,
+                is_compound        BOOLEAN DEFAULT 1,
+                tax_rate           REAL    DEFAULT 0,
+                final_value        REAL,
+                net_profit         REAL,
+                tax_amount         REAL,
+                after_tax_roi      REAL,
+                calculation_json   TEXT,
+                created_at         DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users(id)
+            );
+
             CREATE INDEX IF NOT EXISTS idx_signals_symbol_type ON signals(symbol, signal_type);
             CREATE INDEX IF NOT EXISTS idx_signal_perf_status ON signal_performance(status);
             CREATE INDEX IF NOT EXISTS idx_indicator_acc_name ON indicator_accuracy(indicator_name);
             CREATE INDEX IF NOT EXISTS idx_backtest_symbol ON backtest_results(symbol);
+            CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
+            CREATE INDEX IF NOT EXISTS idx_user_prefs_user_id ON user_preferences(user_id);
+            CREATE INDEX IF NOT EXISTS idx_calcs_user_id ON calculations(user_id);
         """)
     _seed_watchlist()
     logger.info("SQLite database initialised with analytics tables")
@@ -553,3 +595,171 @@ def get_backtest_results(symbol: str | None = None, limit: int = 10) -> list[dic
 
         cursor = conn.execute(query, params)
         return [dict(row) for row in cursor.fetchall()]
+
+
+# ------------------------------------------------------------------ #
+#  User Management (Phase 9)                                        #
+# ------------------------------------------------------------------ #
+
+def create_user(
+    user_id: str,
+    email: str | None = None,
+    display_name: str | None = None,
+    auth_method: str = "guest",
+    password_hash: str | None = None,
+) -> dict:
+    """Create a new user."""
+    with _connect() as conn:
+        conn.execute(
+            """INSERT INTO users (id, email, display_name, auth_method, password_hash)
+               VALUES (?, ?, ?, ?, ?)""",
+            (user_id, email, display_name or "User", auth_method, password_hash),
+        )
+        # Create default preferences
+        conn.execute(
+            """INSERT INTO user_preferences (user_id, subscription_plan)
+               VALUES (?, ?)""",
+            (user_id, "guest" if auth_method == "guest" else "free"),
+        )
+    logger.info(f"Created user: {user_id} ({auth_method})")
+    return get_user(user_id)
+
+
+def get_user(user_id: str) -> dict | None:
+    """Get user by ID."""
+    with _connect() as conn:
+        row = conn.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
+        if row:
+            return dict(row)
+    return None
+
+
+def get_user_by_email(email: str) -> dict | None:
+    """Get user by email."""
+    with _connect() as conn:
+        row = conn.execute("SELECT * FROM users WHERE email = ?", (email,)).fetchone()
+        if row:
+            return dict(row)
+    return None
+
+
+def update_user(user_id: str, **kwargs) -> dict | None:
+    """Update user fields (email, display_name, auth_method, password_hash)."""
+    allowed_fields = {"email", "display_name", "auth_method", "password_hash"}
+    updates = {k: v for k, v in kwargs.items() if k in allowed_fields}
+
+    if not updates:
+        return get_user(user_id)
+
+    updates["updated_at"] = datetime.utcnow().isoformat()
+
+    set_clause = ", ".join(f"{k} = ?" for k in updates.keys())
+    values = list(updates.values()) + [user_id]
+
+    with _connect() as conn:
+        conn.execute(
+            f"UPDATE users SET {set_clause} WHERE id = ?",
+            values,
+        )
+
+    return get_user(user_id)
+
+
+def get_user_preferences(user_id: str) -> dict | None:
+    """Get user preferences."""
+    with _connect() as conn:
+        row = conn.execute(
+            "SELECT * FROM user_preferences WHERE user_id = ?",
+            (user_id,),
+        ).fetchone()
+        if row:
+            return dict(row)
+    return None
+
+
+def update_user_preferences(user_id: str, **kwargs) -> dict | None:
+    """Update user preferences."""
+    allowed_fields = {
+        "theme", "notification_email", "api_calls_limit", "subscription_plan"
+    }
+    updates = {k: v for k, v in kwargs.items() if k in allowed_fields}
+
+    if not updates:
+        return get_user_preferences(user_id)
+
+    updates["updated_at"] = datetime.utcnow().isoformat()
+
+    set_clause = ", ".join(f"{k} = ?" for k in updates.keys())
+    values = list(updates.values()) + [user_id]
+
+    with _connect() as conn:
+        conn.execute(
+            f"UPDATE user_preferences SET {set_clause} WHERE user_id = ?",
+            values,
+        )
+
+    return get_user_preferences(user_id)
+
+
+def save_calculation(
+    user_id: str,
+    principal: float,
+    period_months: int,
+    target_roi: float,
+    final_value: float,
+    net_profit: float,
+    tax_amount: float,
+    after_tax_roi: float,
+    is_compound: bool = True,
+    tax_rate: float = 0,
+    calculation_json: str = "{}",
+) -> dict:
+    """Save a profit calculation."""
+    with _connect() as conn:
+        cursor = conn.execute(
+            """INSERT INTO calculations
+               (user_id, principal, period_months, target_roi, is_compound, tax_rate,
+                final_value, net_profit, tax_amount, after_tax_roi, calculation_json)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (
+                user_id, principal, period_months, target_roi, is_compound, tax_rate,
+                final_value, net_profit, tax_amount, after_tax_roi, calculation_json,
+            ),
+        )
+        calc_id = cursor.lastrowid
+
+    return get_calculation(calc_id)
+
+
+def get_calculation(calc_id: int) -> dict | None:
+    """Get calculation by ID."""
+    with _connect() as conn:
+        row = conn.execute(
+            "SELECT * FROM calculations WHERE id = ?",
+            (calc_id,),
+        ).fetchone()
+        if row:
+            return dict(row)
+    return None
+
+
+def get_user_calculations(user_id: str, limit: int = 50) -> list[dict]:
+    """Get user's calculation history."""
+    with _connect() as conn:
+        rows = conn.execute(
+            "SELECT * FROM calculations WHERE user_id = ? ORDER BY created_at DESC LIMIT ?",
+            (user_id, limit),
+        ).fetchall()
+    return [dict(row) for row in rows]
+
+
+def delete_user(user_id: str) -> bool:
+    """Soft-delete a user (keep data for compliance)."""
+    with _connect() as conn:
+        # Archive user data by setting deleted flag
+        conn.execute(
+            "UPDATE users SET auth_method = 'deleted', email = NULL WHERE id = ?",
+            (user_id,),
+        )
+    logger.info(f"Deleted user: {user_id}")
+    return True

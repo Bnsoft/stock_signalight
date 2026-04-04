@@ -4,8 +4,9 @@ from datetime import datetime, timedelta
 from typing import Optional
 import asyncio
 
-from fastapi import FastAPI, HTTPException, WebSocket
+from fastapi import FastAPI, HTTPException, WebSocket, Depends, status
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
 
 app = FastAPI(title="Signalight API", version="0.1.0")
 
@@ -442,3 +443,207 @@ async def get_correlation_matrix():
         "QLD": {"QQQ": 0.92, "SPY": 0.82, "TQQQ": 0.90, "QLD": 1.0},
     }
     return {"symbols": symbols, "correlation": correlation}
+
+
+# ============= Phase 9: Authentication =============
+
+class SignupRequest(BaseModel):
+    email: str
+    password: str
+    display_name: Optional[str] = None
+
+
+class LoginRequest(BaseModel):
+    email: str
+    password: str
+
+
+class GoogleLoginRequest(BaseModel):
+    token: str
+
+
+@app.post("/auth/signup")
+async def signup(req: SignupRequest):
+    """Register a new user with email and password."""
+    from . import auth
+    try:
+        result = auth.register_user(req.email, req.password, req.display_name)
+        return result
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/auth/login")
+async def login(req: LoginRequest):
+    """Login with email and password."""
+    from . import auth
+    try:
+        result = auth.login_user(req.email, req.password)
+        return result
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/auth/guest")
+async def create_guest():
+    """Create a guest session (no registration required)."""
+    from . import auth
+    try:
+        result = auth.create_guest_user()
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/auth/google")
+async def google_login(req: GoogleLoginRequest):
+    """Login/register via Google OAuth."""
+    from . import auth
+    try:
+        result = auth.google_login(req.token)
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/auth/verify")
+async def verify_token(token: str):
+    """Verify JWT token and return user info."""
+    from . import auth
+    try:
+        user_id = auth.verify_access_token(token)
+        if not user_id:
+            raise HTTPException(status_code=401, detail="Invalid or expired token")
+
+        user = db_store.get_user(user_id)
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+
+        prefs = db_store.get_user_preferences(user_id)
+
+        return {
+            "user_id": user["id"],
+            "email": user.get("email"),
+            "display_name": user["display_name"],
+            "auth_method": user["auth_method"],
+            "preferences": prefs,
+        }
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============= User Settings & Preferences =============
+
+class UpdatePreferencesRequest(BaseModel):
+    theme: Optional[str] = None
+    notification_email: Optional[bool] = None
+    subscription_plan: Optional[str] = None
+
+
+@app.get("/api/user/{user_id}")
+async def get_user_profile(user_id: str):
+    """Get user profile and preferences."""
+    try:
+        user = db_store.get_user(user_id)
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+
+        prefs = db_store.get_user_preferences(user_id)
+
+        return {
+            "user": {
+                "id": user["id"],
+                "email": user.get("email"),
+                "display_name": user["display_name"],
+                "auth_method": user["auth_method"],
+                "created_at": user["created_at"],
+            },
+            "preferences": prefs,
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/user/{user_id}/preferences")
+async def update_user_preferences(user_id: str, req: UpdatePreferencesRequest):
+    """Update user preferences."""
+    try:
+        prefs = db_store.update_user_preferences(user_id, **req.dict(exclude_unset=True))
+        if not prefs:
+            raise HTTPException(status_code=404, detail="User not found")
+        return {"status": "ok", "preferences": prefs}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============= Profit Calculator =============
+
+class CalculationRequest(BaseModel):
+    principal: float
+    period_months: int
+    target_roi: float
+    is_compound: bool = True
+    tax_rate: float = 0
+
+
+@app.post("/api/calculate")
+async def calculate_profit(user_id: str, req: CalculationRequest):
+    """Calculate expected profit with tax considerations."""
+    try:
+        # Calculation logic
+        principal = req.principal
+        period_years = req.period_months / 12
+        roi_rate = req.target_roi / 100
+
+        if req.is_compound:
+            final_value = principal * ((1 + roi_rate) ** period_years)
+        else:
+            final_value = principal * (1 + roi_rate * period_years)
+
+        gross_profit = final_value - principal
+        tax_amount = gross_profit * (req.tax_rate / 100)
+        net_profit = gross_profit - tax_amount
+        after_tax_roi = (net_profit / principal) * 100 if principal > 0 else 0
+
+        # Save calculation
+        calc = db_store.save_calculation(
+            user_id=user_id,
+            principal=principal,
+            period_months=req.period_months,
+            target_roi=req.target_roi,
+            final_value=final_value,
+            net_profit=net_profit,
+            tax_amount=tax_amount,
+            after_tax_roi=after_tax_roi,
+            is_compound=req.is_compound,
+            tax_rate=req.tax_rate,
+        )
+
+        return {
+            "calculation_id": calc["id"],
+            "principal": principal,
+            "final_value": round(final_value, 2),
+            "gross_profit": round(gross_profit, 2),
+            "tax_amount": round(tax_amount, 2),
+            "net_profit": round(net_profit, 2),
+            "after_tax_roi": round(after_tax_roi, 2),
+            "period_months": req.period_months,
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/user/{user_id}/calculations")
+async def get_user_calculations(user_id: str, limit: int = 50):
+    """Get user's calculation history."""
+    try:
+        calcs = db_store.get_user_calculations(user_id, limit)
+        return {"calculations": calcs, "count": len(calcs)}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
