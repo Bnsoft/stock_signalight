@@ -284,3 +284,56 @@ async def run_backtest(symbol: str, days: int = 90):
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# Simple in-memory cache (TTL-based)
+_cache: dict[str, tuple[any, float]] = {}
+CACHE_TTL = 300  # 5 minutes
+
+
+def _cache_get(key: str) -> any:
+    """Get value from cache if not expired."""
+    if key in _cache:
+        value, timestamp = _cache[key]
+        if datetime.utcnow().timestamp() - timestamp < CACHE_TTL:
+            return value
+        else:
+            del _cache[key]
+    return None
+
+
+def _cache_set(key: str, value: any):
+    """Set value in cache with timestamp."""
+    _cache[key] = (value, datetime.utcnow().timestamp())
+
+
+@app.get("/api/export-stats")
+async def export_stats(symbol: Optional[str] = None, format: str = "json"):
+    """신호 통계 내보내기 (JSON/CSV)"""
+    try:
+        # Cache check
+        cache_key = f"stats_export_{symbol}_{format}"
+        cached = _cache_get(cache_key)
+        if cached:
+            return cached
+
+        stats = db_store.get_signal_performance_stats(symbol)
+
+        if format == "json":
+            result = {"stats": stats}
+            _cache_set(cache_key, result)
+            return result
+        elif format == "csv":
+            # CSV format: signal_type,total,wins,losses,win_rate
+            rows = ["signal_type,total,wins,losses,win_rate"]
+            for sig_type, values in stats.items():
+                rows.append(
+                    f"{sig_type},{values['total']},{values['wins']},{values['losses']},{values['win_rate']}"
+                )
+            csv_content = "\n".join(rows)
+            return {"csv": csv_content, "filename": f"signal-stats-{symbol or 'all'}.csv"}
+        else:
+            raise HTTPException(status_code=400, detail="Invalid format")
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
