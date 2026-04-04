@@ -51,12 +51,15 @@ const TYPE_EMOJI: Record<string, string> = {
 }
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"
+const WS_BASE = API_BASE.replace("http://", "ws://").replace("https://", "wss://")
 
 export function SignalFeed() {
   const [signals, setSignals] = useState<Signal[]>(MOCK_SIGNALS)
   const [loading, setLoading] = useState(false)
+  const [wsConnected, setWsConnected] = useState(false)
 
   useEffect(() => {
+    // 초기 신호 fetch
     const fetchSignals = async () => {
       setLoading(true)
       try {
@@ -74,7 +77,6 @@ export function SignalFeed() {
           setSignals(formattedSignals)
         }
       } catch (err) {
-        // API 불가능시 더미 데이터 사용
         console.log("Using mock signals (API unavailable)")
       } finally {
         setLoading(false)
@@ -82,9 +84,47 @@ export function SignalFeed() {
     }
 
     fetchSignals()
-    // 10초마다 새로운 신호 확인
-    const interval = setInterval(fetchSignals, 10000)
-    return () => clearInterval(interval)
+
+    // WebSocket 연결 시도
+    let ws: WebSocket | null = null
+    try {
+      ws = new WebSocket(`${WS_BASE}/ws/signals`)
+      ws.onopen = () => {
+        setWsConnected(true)
+        console.log("WebSocket connected")
+      }
+      ws.onmessage = (event) => {
+        const data = JSON.parse(event.data)
+        if (data.signals) {
+          const formattedSignals = data.signals.map((s: any) => ({
+            id: s.id.toString(),
+            timestamp: s.timestamp,
+            symbol: s.symbol,
+            type: s.severity || "INFO",
+            title: s.signal_type,
+            details: s.message,
+          }))
+          setSignals(formattedSignals)
+        }
+      }
+      ws.onerror = () => {
+        setWsConnected(false)
+        console.log("WebSocket error, falling back to polling")
+      }
+      ws.onclose = () => {
+        setWsConnected(false)
+      }
+    } catch (err) {
+      console.log("WebSocket unavailable, using polling")
+    }
+
+    // Polling fallback (30초마다)
+    const pollInterval = setInterval(fetchSignals, 30000)
+
+    return () => {
+      clearInterval(pollInterval)
+      if (ws) ws.close()
+    }
   }, [])
 
   const formatTime = (isoString: string) => {

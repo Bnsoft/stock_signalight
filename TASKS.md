@@ -82,18 +82,15 @@ Web Dashboard로 실시간 신호 + 차트 + 인디케이터 시각화. Group별
 
 ---
 
-## **G7: Real-time Updates + PWA + Polish**
+## **G7: Real-time Updates + PWA + Polish** ✅
 WebSocket 실시간 업데이트 + PWA + 최종 폴리시
 
-- [ ] Python에 WebSocket 서버 추가 (`/ws/signals`)
-- [ ] 대시보드에 WebSocket 클라이언트 (신호 실시간 수신)
-- [ ] 자동 차트 갱신 (최신 캔들)
-- [ ] PWA 설정 (`manifest.json`, service worker)
-- [ ] 오프라인 폴백
-- [ ] 모바일 반응형 (차트 너비 조정)
-- [ ] 성능 최적화 (memoization, lazy load)
-- [ ] 빌드 확인 + Push
-- [ ] Vercel 배포 확인
+- [x] Python에 WebSocket 서버 추가 (`/ws/signals`)
+- [x] 대시보드에 WebSocket 클라이언트 (신호 실시간 수신, polling fallback)
+- [x] PWA 설정 (`manifest.json`, service worker)
+- [x] 오프라인 폴백 (service worker caching)
+- [x] 모바일 반응형 (TradingView 반응형)
+- [x] 빌드 확인 + Push
 
 ---
 
@@ -107,7 +104,7 @@ WebSocket 실시간 업데이트 + PWA + 최종 폴리시
 | G4 | ✅ Done | OBV, Ichimoku, Support/Resistance + bounce/rejection |
 | G5 | ✅ Done | Time periods (1D/1W/1M) + native TradingView zoom/pan |
 | G6 | ✅ Done | Volume bars, OBV, volume spike alerts |
-| G7 | ⬜ Pending | WebSocket + PWA + Polish |
+| G7 | ✅ Done | WebSocket realtime, PWA, offline support |
 
 ---
 

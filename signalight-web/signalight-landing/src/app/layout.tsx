@@ -1,6 +1,7 @@
 import type { Metadata } from "next"
 import { Geist, Geist_Mono } from "next/font/google"
 import { ThemeProvider } from "@/components/layout/ThemeProvider"
+import { ServiceWorkerRegister } from "@/components/layout/ServiceWorkerRegister"
 import "./globals.css"
 
 const geistSans = Geist({
@@ -18,6 +19,15 @@ export const metadata: Metadata = {
   description:
     "Personal stock signal scanner for ETF traders. RSI, MA crossover, drawdown alerts — straight to your Telegram.",
   keywords: ["stock signals", "ETF scanner", "RSI alert", "trading bot", "QQQ", "TQQQ"],
+  manifest: "/manifest.json",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "black-translucent",
+    title: "Signalight",
+  },
+  formatDetection: {
+    telephone: false,
+  },
   openGraph: {
     title: "Signalight — Stock Signal Scanner",
     description:
@@ -47,6 +57,7 @@ export default function RootLayout({
           enableSystem
           disableTransitionOnChange
         >
+          <ServiceWorkerRegister />
           {children}
         </ThemeProvider>
       </body>
