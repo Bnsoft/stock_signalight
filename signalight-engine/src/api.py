@@ -337,3 +337,41 @@ async def export_stats(symbol: Optional[str] = None, format: str = "json"):
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============= Notification Settings =============
+notification_prefs: dict = {}
+
+
+@app.post("/api/notification-settings")
+async def update_notification_settings(user_id: str, prefs: dict):
+    """사용자 알림 설정 업데이트."""
+    notification_prefs[user_id] = prefs
+    return {"status": "ok", "user_id": user_id}
+
+
+@app.get("/api/notification-settings")
+async def get_notification_settings(user_id: str):
+    """사용자 알림 설정 조회."""
+    return {"settings": notification_prefs.get(user_id, {})}
+
+
+@app.post("/api/test-notification")
+async def test_notification(channel: str, user_id: str = "default"):
+    """알림 채널 테스트."""
+    from .notifier import notify_all_channels
+
+    prefs = notification_prefs.get(user_id, {})
+    if channel == "all":
+        results = await notify_all_channels(
+            "Test Signal",
+            "QQQ",
+            "INFO",
+            "This is a test notification",
+            590.0,
+            prefs,
+        )
+    else:
+        results = {channel: True}  # Simplified
+
+    return {"results": results}

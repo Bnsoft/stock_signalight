@@ -21057,3 +21057,15 @@ telegram.error.NetworkError: Bad Gateway
 2026-04-05 04:43:04  INFO      httpx — HTTP Request: POST https://api.telegram.org/bot8778355904:AAFmP4lt9YJUqYSkF64bBUJdBmoFC_jFsUE/getUpdates "HTTP/1.1 200 OK"
 2026-04-05 04:43:15  INFO      httpx — HTTP Request: POST https://api.telegram.org/bot8778355904:AAFmP4lt9YJUqYSkF64bBUJdBmoFC_jFsUE/getUpdates "HTTP/1.1 200 OK"
 2026-04-05 04:43:25  INFO      httpx — HTTP Request: POST https://api.telegram.org/bot8778355904:AAFmP4lt9YJUqYSkF64bBUJdBmoFC_jFsUE/getUpdates "HTTP/1.1 200 OK"
+2026-04-05 04:43:36  INFO      httpx — HTTP Request: POST https://api.telegram.org/bot8778355904:AAFmP4lt9YJUqYSkF64bBUJdBmoFC_jFsUE/getUpdates "HTTP/1.1 200 OK"
+2026-04-05 04:43:46  INFO      httpx — HTTP Request: POST https://api.telegram.org/bot8778355904:AAFmP4lt9YJUqYSkF64bBUJdBmoFC_jFsUE/getUpdates "HTTP/1.1 200 OK"
+2026-04-05 04:43:52  INFO      apscheduler.executors.default — Running job "scanner (trigger: interval[0:05:00], next run at: 2026-04-04 18:48:52 UTC)" (scheduled at 2026-04-04 18:43:52.103989+00:00)
+2026-04-05 04:43:52  INFO      __main__ — Market closed — scan skipped
+2026-04-05 04:43:52  INFO      apscheduler.executors.default — Job "scanner (trigger: interval[0:05:00], next run at: 2026-04-04 18:48:52 UTC)" executed successfully
+2026-04-05 04:43:56  INFO      httpx — HTTP Request: POST https://api.telegram.org/bot8778355904:AAFmP4lt9YJUqYSkF64bBUJdBmoFC_jFsUE/getUpdates "HTTP/1.1 200 OK"
+2026-04-05 04:44:07  INFO      httpx — HTTP Request: POST https://api.telegram.org/bot8778355904:AAFmP4lt9YJUqYSkF64bBUJdBmoFC_jFsUE/getUpdates "HTTP/1.1 200 OK"
+2026-04-05 04:44:17  INFO      httpx — HTTP Request: POST https://api.telegram.org/bot8778355904:AAFmP4lt9YJUqYSkF64bBUJdBmoFC_jFsUE/getUpdates "HTTP/1.1 200 OK"
+2026-04-05 04:44:27  INFO      httpx — HTTP Request: POST https://api.telegram.org/bot8778355904:AAFmP4lt9YJUqYSkF64bBUJdBmoFC_jFsUE/getUpdates "HTTP/1.1 200 OK"
+2026-04-05 04:44:38  INFO      httpx — HTTP Request: POST https://api.telegram.org/bot8778355904:AAFmP4lt9YJUqYSkF64bBUJdBmoFC_jFsUE/getUpdates "HTTP/1.1 200 OK"
+2026-04-05 04:44:48  INFO      httpx — HTTP Request: POST https://api.telegram.org/bot8778355904:AAFmP4lt9YJUqYSkF64bBUJdBmoFC_jFsUE/getUpdates "HTTP/1.1 200 OK"
+2026-04-05 04:44:58  INFO      httpx — HTTP Request: POST https://api.telegram.org/bot8778355904:AAFmP4lt9YJUqYSkF64bBUJdBmoFC_jFsUE/getUpdates "HTTP/1.1 200 OK"
