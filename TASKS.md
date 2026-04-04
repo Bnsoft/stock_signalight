@@ -68,17 +68,17 @@ Web Dashboard로 실시간 신호 + 차트 + 인디케이터 시각화. Group별
 
 ---
 
-## **G6: Volume Visualization + Volume Alerts**
+## **G6: Volume Visualization + Volume Alerts** ✅
 거래량 바 + OBV + 거래량 기반 알람
 
-- [ ] 차트 하단에 Volume Bar 표시 (상승/하락 컬러)
-- [ ] OBV 선 추가 (거래량 패널)
-- [ ] 평균 거래량 계산 (MA20)
-- [ ] 거래량 알람 로직
-  - [ ] 거래량 > 2× MA20 → Alert
-  - [ ] 거래량 급증 신호 trigger
-- [ ] Volume Spike 신호 24h cooldown
-- [ ] Build + Push
+- [x] 차트 하단에 Volume Bar 표시 (상승/하락 컬러)
+- [x] OBV 계산 + IndicatorPanel 표시
+- [x] 평균 거래량 계산 (MA20)
+- [x] 거래량 알람 로직
+  - [x] 거래량 > 2× MA20 → Alert
+  - [x] 거래량 급증 신호 trigger
+- [x] Volume Spike 신호 4h cooldown
+- [x] Build + Push
 
 ---
 
@@ -106,7 +106,7 @@ WebSocket 실시간 업데이트 + PWA + 최종 폴리시
 | G3 | ✅ Done | VWAP, Stochastic, ATR, ADX + trigger logic |
 | G4 | ✅ Done | OBV, Ichimoku, Support/Resistance + bounce/rejection |
 | G5 | ✅ Done | Time periods (1D/1W/1M) + native TradingView zoom/pan |
-| G6 | ⬜ Pending | Volume + OBV + Alerts |
+| G6 | ✅ Done | Volume bars, OBV, volume spike alerts |
 | G7 | ⬜ Pending | WebSocket + PWA + Polish |
 
 ---
