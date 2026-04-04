@@ -4,6 +4,7 @@ import { useState, useEffect } from "react"
 import { useAuth } from "@/context/AuthContext"
 import { Button } from "@/components/ui/button"
 import { AnimateIn } from "@/components/layout/AnimateIn"
+import { ShareCalculationDialog } from "@/components/dashboard/ShareCalculationDialog"
 import {
   LineChart,
   Line,
@@ -25,7 +26,7 @@ import {
   type CalculationInput,
   type CalculationResult,
 } from "@/lib/calculator"
-import { Save, Copy } from "lucide-react"
+import { Save, Copy, Share2 } from "lucide-react"
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"
 
@@ -44,6 +45,7 @@ export default function CalculatorPage() {
   const [scenarios, setScenarios] = useState<any[]>([])
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState("")
+  const [shareDialogOpen, setShareDialogOpen] = useState(false)
 
   // Tax bracket selection
   const selectedTaxRate = TAX_BRACKETS[taxBracket]?.longTerm || 0
@@ -274,6 +276,15 @@ After-Tax ROI: ${result?.afterTaxROI.toFixed(2)}%`
                   <Copy className="w-4 h-4 mr-2" />
                   Copy Results
                 </Button>
+                <Button
+                  onClick={() => setShareDialogOpen(true)}
+                  variant="outline"
+                  className="w-full"
+                  disabled={!result}
+                >
+                  <Share2 className="w-4 h-4 mr-2" />
+                  Share
+                </Button>
               </div>
             </div>
           </AnimateIn>
@@ -454,6 +465,15 @@ After-Tax ROI: ${result?.afterTaxROI.toFixed(2)}%`
             </div>
           </AnimateIn>
         </div>
+
+        {/* Share Dialog */}
+        {result && (
+          <ShareCalculationDialog
+            calculation={result}
+            isOpen={shareDialogOpen}
+            onClose={() => setShareDialogOpen(false)}
+          />
+        )}
       </div>
     </div>
   )
