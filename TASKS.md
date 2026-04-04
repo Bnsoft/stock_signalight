@@ -43,15 +43,15 @@ Web Dashboard로 실시간 신호 + 차트 + 인디케이터 시각화. Group별
 
 ---
 
-## **G4: Additional Indicators (EMA Cross, OBV, Ichimoku)**
+## **G4: Additional Indicators (EMA Cross, OBV, Ichimoku)** ✅
 추가 인디케이터 + 신호 생성
 
-- [ ] OBV (On-Balance Volume) 계산 + 별도 패널
-- [ ] Ichimoku Cloud 구현 (Tenkan, Kijun, Senkou, Chikou)
-- [ ] Support/Resistance Auto-detect (Local min/max)
-- [ ] 각 인디케이터별 Alert 로직 (`src/trigger.py`)
-- [ ] Cooldown 적용 (24h per signal type per symbol)
-- [ ] Build + Push
+- [x] OBV (On-Balance Volume) 계산 + 별도 패널
+- [x] Ichimoku Cloud 구현 (Tenkan, Kijun, Senkou, Chikou)
+- [x] Support/Resistance Auto-detect (Local min/max)
+- [x] 각 인디케이터별 Alert 로직 (`src/trigger.py`)
+- [x] Cooldown 적용 (24h per signal type per symbol)
+- [x] Build + Push
 
 ---
 
@@ -105,7 +105,7 @@ WebSocket 실시간 업데이트 + PWA + 최종 폴리시
 | G1 | ✅ Done | Layout + Lightweight Charts (MA20/MA60, Volume bars) |
 | G2 | ✅ Done | FastAPI (/api/signals, /api/candles), Signal Feed fetch |
 | G3 | ✅ Done | VWAP, Stochastic, ATR, ADX + trigger logic |
-| G4 | ⬜ Pending | OBV, Ichimoku, Support/Resistance |
+| G4 | ✅ Done | OBV, Ichimoku, Support/Resistance + bounce/rejection |
 | G5 | ⬜ Pending | Time periods + Zoom/Pan |
 | G6 | ⬜ Pending | Volume + OBV + Alerts |
 | G7 | ⬜ Pending | WebSocket + PWA + Polish |

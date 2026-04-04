@@ -20,6 +20,10 @@ class SignalType(str, Enum):
     STOCH_OVERBOUGHT       = "Stochastic Overbought"
     ATR_SPIKE              = "ATR Spike"
     ADX_STRONG_TREND       = "Strong Trend (ADX)"
+    OBV_DIVERGENCE         = "OBV Bullish Divergence"
+    ICHIMOKU_BREAKOUT      = "Ichimoku Cloud Breakout"
+    SUPPORT_BOUNCE         = "Support Level Bounce"
+    RESISTANCE_REJECTION   = "Resistance Level Rejection"
 
 
 class Severity(str, Enum):
@@ -294,6 +298,111 @@ def check_adx_signal(symbol: str, indicators: dict) -> list[dict]:
     }]
 
 
+def check_obv_signal(symbol: str, indicators: dict, prev_indicators: dict) -> list[dict]:
+    """OBV Bullish Divergence: price at support but OBV rising."""
+    price = indicators.get("current_price")
+    obv = indicators.get("obv")
+    support = indicators.get("support")
+    prev_obv = prev_indicators.get("obv")
+
+    if None in (price, obv, support, prev_obv):
+        return []
+
+    signals = []
+    # Price near support but OBV trending up = bullish divergence
+    if price <= support * 1.02 and obv > prev_obv:
+        sig_type = SignalType.OBV_DIVERGENCE.value
+        if not _already_fired(symbol, sig_type, hours=6):
+            signals.append({
+                "symbol": symbol,
+                "signal_type": sig_type,
+                "severity": Severity.ACTION.value,
+                "message": f"OBV bullish divergence: price at support {support:.2f}, OBV rising",
+                "indicators": indicators,
+                "price": price,
+            })
+
+    return signals
+
+
+def check_ichimoku_signal(symbol: str, indicators: dict) -> list[dict]:
+    """Ichimoku Cloud Breakout: price crosses above cloud."""
+    price = indicators.get("current_price")
+    senkou_a = indicators.get("ichimoku_senkou_a")
+    senkou_b = indicators.get("ichimoku_senkou_b")
+
+    if None in (price, senkou_a, senkou_b):
+        return []
+
+    cloud_top = max(senkou_a, senkou_b)
+    cloud_bottom = min(senkou_a, senkou_b)
+
+    signals = []
+    # Price breakout above cloud
+    if price > cloud_top * 1.01:
+        sig_type = SignalType.ICHIMOKU_BREAKOUT.value
+        if not _already_fired(symbol, sig_type, hours=8):
+            signals.append({
+                "symbol": symbol,
+                "signal_type": sig_type,
+                "severity": Severity.WARNING.value,
+                "message": f"Ichimoku breakout above cloud: {price:.2f} > {cloud_top:.2f}",
+                "indicators": indicators,
+                "price": price,
+            })
+
+    return signals
+
+
+def check_support_resistance_signal(symbol: str, indicators: dict, prev_indicators: dict) -> list[dict]:
+    """Price bounces off support or rejected at resistance."""
+    price = indicators.get("current_price")
+    prev_price = prev_indicators.get("current_price")
+    support = indicators.get("support")
+    resistance = indicators.get("resistance")
+
+    if None in (price, prev_price, support, resistance):
+        return []
+
+    signals = []
+
+    # Bounce off support
+    if (
+        prev_price is not None
+        and prev_price <= support * 1.02
+        and price > support * 1.03
+    ):
+        sig_type = SignalType.SUPPORT_BOUNCE.value
+        if not _already_fired(symbol, sig_type, hours=4):
+            signals.append({
+                "symbol": symbol,
+                "signal_type": sig_type,
+                "severity": Severity.INFO.value,
+                "message": f"Support bounce: bounced from {support:.2f} to {price:.2f}",
+                "indicators": indicators,
+                "price": price,
+            })
+
+    # Rejection at resistance
+    elif (
+        prev_price is not None
+        and prev_price >= resistance * 0.98
+        and price < resistance * 0.97
+    ):
+        sig_type = SignalType.RESISTANCE_REJECTION.value
+        if not _already_fired(symbol, sig_type, hours=4):
+            signals.append({
+                "symbol": symbol,
+                "signal_type": sig_type,
+                "severity": Severity.INFO.value,
+                "message": f"Resistance rejection: rejected from {resistance:.2f} to {price:.2f}",
+                "indicators": indicators,
+                "price": price,
+            })
+
+    return signals
+
+
 def check_volume_spike(symbol: str, indicators: dict, threshold: float = 2.0) -> list[dict]:
     """Fire when current volume is >= threshold x the 20-day average."""
     ratio = indicators.get("volume_ratio")
@@ -336,6 +445,9 @@ def evaluate_all_signals(
     triggered += check_stochastic_signals(symbol, indicators)
     triggered += check_atr_signal(symbol, indicators, prev_indicators)
     triggered += check_adx_signal(symbol, indicators)
+    triggered += check_obv_signal(symbol, indicators, prev_indicators)
+    triggered += check_ichimoku_signal(symbol, indicators)
+    triggered += check_support_resistance_signal(symbol, indicators, prev_indicators)
 
     if triggered:
         logger.info(f"{symbol}: {len(triggered)} signal(s) triggered")

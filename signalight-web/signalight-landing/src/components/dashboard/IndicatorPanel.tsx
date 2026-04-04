@@ -46,8 +46,13 @@ export function IndicatorPanel({ symbol }: { symbol: string }) {
             { name: "Stoch D", value: ind.stoch_d?.toFixed(1) },
             { name: "ATR", value: `$${ind.atr?.toFixed(2)}` },
             { name: "ADX", value: ind.adx?.toFixed(1), color: ind.adx > 25 ? "text-signal-green" : "" },
+            { name: "OBV", value: ind.obv ? `${(ind.obv / 1e9).toFixed(1)}B` : "—" },
+            { name: "Support", value: `$${ind.support?.toFixed(2)}` },
+            { name: "Resist", value: `$${ind.resistance?.toFixed(2)}` },
+            { name: "Tenkan", value: `$${ind.ichimoku_tenkan?.toFixed(2)}` },
+            { name: "Kijun", value: `$${ind.ichimoku_kijun?.toFixed(2)}` },
             { name: "Volume", value: `${ind.volume_ratio?.toFixed(2)}×` },
-          ].filter((i) => i.value !== undefined && i.value !== "NaN")
+          ].filter((i) => i.value !== undefined && i.value !== "NaN" && i.value !== "—")
           setIndicators(formatted as Indicator[])
         }
       } catch (err) {
