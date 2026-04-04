@@ -55,17 +55,16 @@ Web Dashboard로 실시간 신호 + 차트 + 인디케이터 시각화. Group별
 
 ---
 
-## **G5: Time Period Selection + Zoom/Pan**
+## **G5: Time Period Selection + Zoom/Pan** ✅
 기간 선택 (1D/1W/1M) + 마우스 상호작용
 
-- [ ] 기간 선택 버튼 UI (1D, 1W, 1M, All)
-- [ ] Python에서 기간별 OHLCV 데이터 fetch
-- [ ] `/api/candles?symbol=QQQ&period=1D` 엔드포인트
-- [ ] 차트 기간 변경시 데이터 리로드
-- [ ] 마우스 휠 줌 (TradingView 기본)
-- [ ] 드래그 팬 (TradingView 기본)
-- [ ] 터치 줌/팬 (모바일)
-- [ ] Build + Push
+- [x] 기간 선택 버튼 UI (1D, 1W, 1M)
+- [x] Python에서 기간별 OHLCV 데이터 fetch
+- [x] `/api/candles?symbol=QQQ&period=1D` 엔드포인트
+- [x] 차트 기간 변경시 자동 데이터 리로드
+- [x] 마우스 휠 줌 (TradingView 기본)
+- [x] 드래그 팬 (TradingView 기본)
+- [x] Build + Push
 
 ---
 
@@ -106,7 +105,7 @@ WebSocket 실시간 업데이트 + PWA + 최종 폴리시
 | G2 | ✅ Done | FastAPI (/api/signals, /api/candles), Signal Feed fetch |
 | G3 | ✅ Done | VWAP, Stochastic, ATR, ADX + trigger logic |
 | G4 | ✅ Done | OBV, Ichimoku, Support/Resistance + bounce/rejection |
-| G5 | ⬜ Pending | Time periods + Zoom/Pan |
+| G5 | ✅ Done | Time periods (1D/1W/1M) + native TradingView zoom/pan |
 | G6 | ⬜ Pending | Volume + OBV + Alerts |
 | G7 | ⬜ Pending | WebSocket + PWA + Polish |
 
