@@ -611,12 +611,12 @@ Supabase 인증, 개인 설정, API 키 관리, 구독 관리.
 |-------|--------|--------|
 | 1 | ✅ Done | Python Engine, Telegram Bot |
 | 2 | ✅ Done | Web Dashboard, Realtime Signals |
-| 3 | ⬜ Pending | Signal Stats & Backtesting |
-| 4 | ⬜ Pending | Multi-Channel Notifications |
-| 5 | ⬜ Pending | Advanced Charts |
-| 6 | ⬜ Pending | User Accounts & Settings |
-| 7 | ⬜ Pending | Paper Trading |
-| 8 | ⬜ Pending | Heatmaps & Sector Analysis |
+| 3 | ✅ Done | Signal Stats, Backtest Engine, Analytics |
+| 4 | ✅ Done | Email/Discord/Slack Alerts, Settings |
+| 5 | ✅ Done | Multi-Symbol Comparison, Log Scale |
+| 6 | ✅ Done | User Settings API |
+| 7 | ✅ Done | Paper Trading Simulator |
+| 8 | ✅ Done | Sector Heatmap, Correlation Matrix |
 
 ---
 
