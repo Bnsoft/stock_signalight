@@ -647,3 +647,174 @@ async def get_user_calculations(user_id: str, limit: int = 50):
         return {"calculations": calcs, "count": len(calcs)}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============= Phase 10: Portfolio & Performance =============
+
+class PositionRequest(BaseModel):
+    symbol: str
+    quantity: float
+    entry_price: float
+    entry_date: Optional[str] = None
+    notes: Optional[str] = None
+
+
+class GoalRequest(BaseModel):
+    goal_name: str
+    target_amount: float
+    target_date: str
+
+
+class TargetRequest(BaseModel):
+    symbol: str
+    target_percentage: float
+
+
+@app.post("/api/portfolio/positions")
+async def add_position(user_id: str, req: PositionRequest):
+    """Add a position to portfolio."""
+    from . import portfolio
+    try:
+        pos = portfolio.add_position(
+            user_id=user_id,
+            symbol=req.symbol,
+            quantity=req.quantity,
+            entry_price=req.entry_price,
+            entry_date=req.entry_date,
+            notes=req.notes or "",
+        )
+        return {"status": "ok", "position": pos}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/portfolio/{user_id}")
+async def get_portfolio(user_id: str):
+    """Get portfolio overview."""
+    from . import portfolio
+    try:
+        portfolio_data = portfolio.calculate_portfolio_value(user_id)
+        sharpe = portfolio.calculate_sharpe_ratio(user_id)
+        max_dd = portfolio.calculate_max_drawdown(user_id)
+
+        return {
+            **portfolio_data,
+            "sharpe_ratio": sharpe,
+            "max_drawdown": max_dd,
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/portfolio/{user_id}/history")
+async def get_portfolio_history(user_id: str, days: int = 90):
+    """Get portfolio history."""
+    from . import portfolio
+    try:
+        history = portfolio.get_portfolio_history(user_id, days)
+        return {"history": history, "count": len(history)}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.delete("/api/portfolio/positions/{position_id}")
+async def delete_position(position_id: int):
+    """Delete a position."""
+    from . import portfolio
+    try:
+        success = portfolio.delete_position(position_id)
+        return {"status": "ok" if success else "not_found"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.put("/api/portfolio/positions/{position_id}/price")
+async def update_position_price(position_id: int, current_price: float):
+    """Update position current price."""
+    from . import portfolio
+    try:
+        pos = portfolio.update_position_price(position_id, current_price)
+        return {"status": "ok", "position": pos}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/performance/{user_id}/metrics")
+async def get_performance_metrics(user_id: str):
+    """Get performance metrics."""
+    from . import portfolio
+    try:
+        data = portfolio.calculate_portfolio_value(user_id)
+        history = portfolio.get_portfolio_history(user_id, 365)
+
+        monthly_returns = {}
+        for h in history:
+            month = h["recorded_at"][:7]  # YYYY-MM
+            if month not in monthly_returns:
+                monthly_returns[month] = {"pnl": 0, "count": 0}
+            if h["daily_return"]:
+                monthly_returns[month]["pnl"] += h["daily_return"]
+                monthly_returns[month]["count"] += 1
+
+        return {
+            "total_value": data["total_value"],
+            "total_return": data["total_return"],
+            "sharpe_ratio": portfolio.calculate_sharpe_ratio(user_id),
+            "max_drawdown": portfolio.calculate_max_drawdown(user_id),
+            "monthly_returns": monthly_returns,
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/goals")
+async def create_goal(user_id: str, req: GoalRequest):
+    """Create investment goal."""
+    from . import portfolio
+    try:
+        goal = portfolio.set_investment_goal(
+            user_id=user_id,
+            goal_name=req.goal_name,
+            target_amount=req.target_amount,
+            target_date=req.target_date,
+        )
+        return {"status": "ok", "goal": goal}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/goals/{user_id}")
+async def get_goals(user_id: str):
+    """Get user's investment goals."""
+    from . import portfolio
+    try:
+        goals = portfolio.get_user_goals(user_id)
+        return {"goals": goals, "count": len(goals)}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/portfolio/targets")
+async def set_target(user_id: str, req: TargetRequest):
+    """Set target allocation."""
+    from . import portfolio
+    try:
+        targets = portfolio.set_portfolio_target(
+            user_id=user_id,
+            symbol=req.symbol,
+            target_percentage=req.target_percentage,
+        )
+        return {"status": "ok", "targets": targets}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/portfolio/{user_id}/rebalance-suggestion")
+async def get_rebalance_suggestion(user_id: str):
+    """Get rebalancing suggestions."""
+    from . import portfolio
+    try:
+        suggestion = portfolio.get_rebalancing_suggestion(user_id)
+        return suggestion
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))

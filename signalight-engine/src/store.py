@@ -165,6 +165,64 @@ def init_db() -> None:
                 FOREIGN KEY (user_id) REFERENCES users(id)
             );
 
+            CREATE TABLE IF NOT EXISTS positions (
+                id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id            TEXT    NOT NULL,
+                symbol             TEXT    NOT NULL,
+                quantity           REAL    NOT NULL,
+                entry_price        REAL    NOT NULL,
+                current_price      REAL    NOT NULL,
+                entry_date         DATETIME,
+                notes              TEXT,
+                created_at         DATETIME DEFAULT CURRENT_TIMESTAMP,
+                updated_at         DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users(id)
+            );
+
+            CREATE TABLE IF NOT EXISTS portfolio_history (
+                id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id            TEXT    NOT NULL,
+                total_value        REAL    NOT NULL,
+                cash_balance       REAL    DEFAULT 0,
+                daily_pnl          REAL,
+                daily_return       REAL,
+                recorded_at        DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users(id)
+            );
+
+            CREATE TABLE IF NOT EXISTS portfolio_targets (
+                id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id            TEXT    NOT NULL,
+                symbol             TEXT    NOT NULL,
+                target_percentage  REAL,
+                created_at         DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users(id)
+            );
+
+            CREATE TABLE IF NOT EXISTS investment_goals (
+                id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id            TEXT    NOT NULL,
+                goal_name          TEXT,
+                target_amount      REAL,
+                current_amount     REAL DEFAULT 0,
+                target_date        DATE,
+                progress_percent   REAL DEFAULT 0,
+                created_at         DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users(id)
+            );
+
+            CREATE TABLE IF NOT EXISTS rebalance_history (
+                id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id            TEXT    NOT NULL,
+                rebalance_date     DATETIME,
+                before_allocation  TEXT,
+                after_allocation   TEXT,
+                trades_executed    INTEGER,
+                total_cost         REAL,
+                created_at         DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users(id)
+            );
+
             CREATE INDEX IF NOT EXISTS idx_signals_symbol_type ON signals(symbol, signal_type);
             CREATE INDEX IF NOT EXISTS idx_signal_perf_status ON signal_performance(status);
             CREATE INDEX IF NOT EXISTS idx_indicator_acc_name ON indicator_accuracy(indicator_name);
@@ -172,6 +230,11 @@ def init_db() -> None:
             CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
             CREATE INDEX IF NOT EXISTS idx_user_prefs_user_id ON user_preferences(user_id);
             CREATE INDEX IF NOT EXISTS idx_calcs_user_id ON calculations(user_id);
+            CREATE INDEX IF NOT EXISTS idx_positions_user_symbol ON positions(user_id, symbol);
+            CREATE INDEX IF NOT EXISTS idx_portfolio_history_user ON portfolio_history(user_id);
+            CREATE INDEX IF NOT EXISTS idx_portfolio_targets_user ON portfolio_targets(user_id);
+            CREATE INDEX IF NOT EXISTS idx_investment_goals_user ON investment_goals(user_id);
+            CREATE INDEX IF NOT EXISTS idx_rebalance_history_user ON rebalance_history(user_id);
         """)
     _seed_watchlist()
     logger.info("SQLite database initialised with analytics tables")
