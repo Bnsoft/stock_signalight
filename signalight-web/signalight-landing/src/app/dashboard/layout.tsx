@@ -1,9 +1,17 @@
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute"
+import { DashboardNav } from "@/components/dashboard/DashboardNav"
 
 export default function DashboardLayout({
   children,
 }: {
   children: React.ReactNode
 }) {
-  return <ProtectedRoute>{children}</ProtectedRoute>
+  return (
+    <ProtectedRoute>
+      <div className="min-h-screen flex flex-col">
+        <DashboardNav />
+        <div className="flex-1">{children}</div>
+      </div>
+    </ProtectedRoute>
+  )
 }

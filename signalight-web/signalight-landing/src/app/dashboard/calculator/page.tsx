@@ -379,6 +379,76 @@ After-Tax ROI: ${result?.afterTaxROI.toFixed(2)}%`
                       </ResponsiveContainer>
                     </div>
                   </div>
+
+                  {/* Scenario Comparison Table */}
+                  <div className="bg-card border border-border rounded-lg p-6">
+                    <h3 className="text-sm font-semibold mb-4">Detailed Scenario Comparison</h3>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="border-b border-border">
+                            <th className="text-left py-3 px-4 font-semibold">ROI</th>
+                            <th className="text-right py-3 px-4">Final Value</th>
+                            <th className="text-right py-3 px-4">Gross Profit</th>
+                            <th className="text-right py-3 px-4">Tax</th>
+                            <th className="text-right py-3 px-4">Net Profit</th>
+                            <th className="text-right py-3 px-4">After-Tax ROI</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {scenarios.map((scenario, idx) => (
+                            <tr key={idx} className="border-b border-border/50 hover:bg-muted/30 transition">
+                              <td className="py-3 px-4 font-mono font-semibold">{scenario.roi}%</td>
+                              <td className="text-right py-3 px-4 font-mono text-green-600">
+                                {formatCurrency(scenario.finalValue)}
+                              </td>
+                              <td className="text-right py-3 px-4 font-mono text-blue-600">
+                                {formatCurrency(
+                                  scenario.finalValue - principal
+                                )}
+                              </td>
+                              <td className="text-right py-3 px-4 font-mono text-orange-600">
+                                {formatCurrency(
+                                  (scenario.finalValue - principal) *
+                                    (selectedTaxRate)
+                                )}
+                              </td>
+                              <td className="text-right py-3 px-4 font-mono font-semibold">
+                                {formatCurrency(scenario.netProfit)}
+                              </td>
+                              <td className="text-right py-3 px-4 font-mono text-primary font-semibold">
+                                {scenario.afterTaxROI.toFixed(2)}%
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+
+                  {/* Key Takeaways */}
+                  <div className="bg-muted/50 border border-border/50 rounded-lg p-6">
+                    <h3 className="text-sm font-semibold mb-3">Key Takeaways</h3>
+                    <ul className="text-xs text-muted-foreground space-y-2">
+                      <li>
+                        • <strong>Final Value:</strong> Total amount after investing for {periodMonths}{" "}
+                        month{periodMonths !== 1 ? "s" : ""}
+                      </li>
+                      <li>
+                        • <strong>After-Tax ROI:</strong> Actual return after accounting for {(selectedTaxRate * 100).toFixed(1)}% tax
+                      </li>
+                      <li>
+                        • <strong>Compound Interest:</strong>{" "}
+                        {isCompound
+                          ? "Earning returns on your returns — accelerates growth"
+                          : "Linear growth — returns calculated on original principal"}
+                      </li>
+                      <li>
+                        • <strong>Tax Planning:</strong> Consider timing and jurisdiction to optimize
+                        after-tax returns
+                      </li>
+                    </ul>
+                  </div>
                 </>
               )}
             </div>
