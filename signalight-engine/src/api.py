@@ -375,3 +375,70 @@ async def test_notification(channel: str, user_id: str = "default"):
         results = {channel: True}  # Simplified
 
     return {"results": results}
+
+
+# ============= Phase 6: User Settings =============
+user_preferences: dict = {}
+
+
+@app.post("/api/user-settings")
+async def save_user_settings(user_id: str, settings: dict):
+    """사용자 설정 저장."""
+    user_preferences[user_id] = settings
+    return {"status": "ok"}
+
+
+@app.get("/api/user-settings")
+async def get_user_settings(user_id: str = "default"):
+    """사용자 설정 조회."""
+    return {"settings": user_preferences.get(user_id, {})}
+
+
+# ============= Phase 7: Paper Trading =============
+paper_trades: dict = {}
+
+
+@app.post("/api/paper-trade")
+async def create_paper_trade(user_id: str, symbol: str, quantity: int, entry_price: float):
+    """종이 거래 진입."""
+    trade_id = f"{user_id}_{symbol}_{datetime.utcnow().timestamp()}"
+    paper_trades[trade_id] = {
+        "symbol": symbol,
+        "quantity": quantity,
+        "entry_price": entry_price,
+        "entry_time": datetime.utcnow().isoformat(),
+        "status": "OPEN",
+    }
+    return {"trade_id": trade_id, "status": "ok"}
+
+
+@app.get("/api/paper-trades")
+async def get_paper_trades(user_id: str = "default"):
+    """종이 거래 조회."""
+    trades = [t for tid, t in paper_trades.items() if tid.startswith(user_id)]
+    return {"trades": trades, "count": len(trades)}
+
+
+# ============= Phase 8: Sector Heatmap =============
+@app.get("/api/sector-heatmap")
+async def get_sector_heatmap():
+    """섹터별 성과 열량도."""
+    sectors = {
+        "Technology": {"QQQ": 2.5, "TQQQ": 5.2, "QQQI": 1.8},
+        "Broad": {"SPY": 1.2, "SPYI": 2.1},
+        "Growth": {"QLD": 3.1},
+    }
+    return {"sectors": sectors}
+
+
+@app.get("/api/correlation-matrix")
+async def get_correlation_matrix():
+    """심볼 상관관계 매트릭스."""
+    symbols = ["QQQ", "SPY", "TQQQ", "QLD"]
+    correlation = {
+        "QQQ": {"QQQ": 1.0, "SPY": 0.85, "TQQQ": 0.95, "QLD": 0.92},
+        "SPY": {"QQQ": 0.85, "SPY": 1.0, "TQQQ": 0.80, "QLD": 0.82},
+        "TQQQ": {"QQQ": 0.95, "SPY": 0.80, "TQQQ": 1.0, "QLD": 0.90},
+        "QLD": {"QQQ": 0.92, "SPY": 0.82, "TQQQ": 0.90, "QLD": 1.0},
+    }
+    return {"symbols": symbols, "correlation": correlation}
