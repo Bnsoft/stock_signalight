@@ -1855,3 +1855,467 @@ async def start_mirror_trading(user_id: str, trader_id: str, allocation_percent:
         return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============= Advanced Alerts System (고급 알람 시스템) =============
+
+class PriceAlertRequest(BaseModel):
+    symbol: str
+    alert_type: str  # PRICE_ABOVE, PRICE_BELOW, PRICE_BETWEEN
+    trigger_price: float
+    trigger_price_high: Optional[float] = None
+    notify_methods: List[str] = None
+    repeat_alert: bool = True
+
+
+class IndicatorAlertRequest(BaseModel):
+    symbol: str
+    indicator: str  # RSI, MACD, BOLLINGER, VOLUME, MA
+    condition: str  # ABOVE, BELOW, CROSS_ABOVE, CROSS_BELOW
+    threshold: float
+    timeframe: str = "1D"
+    notify_methods: List[str] = None
+
+
+class VolumeAlertRequest(BaseModel):
+    symbol: str
+    alert_type: str  # UNUSUAL_VOLUME, VOLUME_ABOVE, VOLUME_BELOW
+    volume_threshold: float
+    multiplier: float = 2.0
+    notify_methods: List[str] = None
+
+
+class PortfolioAlertRequest(BaseModel):
+    alert_type: str  # PORTFOLIO_GAIN, PORTFOLIO_LOSS, POSITION_LOSS, DAILY_LOSS
+    threshold: float
+    notify_methods: List[str] = None
+
+
+class NewsAlertRequest(BaseModel):
+    symbol: str
+    keywords: List[str]
+    sentiment: Optional[str] = None
+    notify_methods: List[str] = None
+
+
+class TimeAlertRequest(BaseModel):
+    symbol: str
+    alert_time: str  # HH:MM format
+    message: str
+    recurring: str = "DAILY"
+    days_of_week: Optional[List[str]] = None
+    notify_methods: List[str] = None
+
+
+class CompositeAlertRequest(BaseModel):
+    symbol: str
+    conditions: List[Dict]
+    logic: str = "AND"
+    notify_methods: List[str] = None
+
+
+class NotificationSettingsRequest(BaseModel):
+    email: bool = True
+    push: bool = True
+    sms: bool = False
+    telegram: bool = False
+    discord: bool = False
+    quiet_hours: Optional[str] = None
+
+
+@app.post("/api/alerts/price")
+async def create_price_alert(user_id: str, req: PriceAlertRequest):
+    """Create price-based alert."""
+    from . import alerts_advanced
+    try:
+        alert = alerts_advanced.create_price_alert(
+            user_id=user_id,
+            symbol=req.symbol,
+            alert_type=req.alert_type,
+            trigger_price=req.trigger_price,
+            trigger_price_high=req.trigger_price_high,
+            notify_methods=req.notify_methods or ["PUSH"],
+            repeat_alert=req.repeat_alert
+        )
+        return alert
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/alerts/indicator")
+async def create_indicator_alert(user_id: str, req: IndicatorAlertRequest):
+    """Create indicator-based alert."""
+    from . import alerts_advanced
+    try:
+        alert = alerts_advanced.create_indicator_alert(
+            user_id=user_id,
+            symbol=req.symbol,
+            indicator=req.indicator,
+            condition=req.condition,
+            threshold=req.threshold,
+            timeframe=req.timeframe,
+            notify_methods=req.notify_methods or ["PUSH"]
+        )
+        return alert
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/alerts/volume")
+async def create_volume_alert(user_id: str, req: VolumeAlertRequest):
+    """Create volume-based alert."""
+    from . import alerts_advanced
+    try:
+        alert = alerts_advanced.create_volume_alert(
+            user_id=user_id,
+            symbol=req.symbol,
+            alert_type=req.alert_type,
+            volume_threshold=req.volume_threshold,
+            multiplier=req.multiplier,
+            notify_methods=req.notify_methods or ["PUSH"]
+        )
+        return alert
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/alerts/portfolio")
+async def create_portfolio_alert(user_id: str, req: PortfolioAlertRequest):
+    """Create portfolio-based alert."""
+    from . import alerts_advanced
+    try:
+        alert = alerts_advanced.create_portfolio_alert(
+            user_id=user_id,
+            alert_type=req.alert_type,
+            threshold=req.threshold,
+            notify_methods=req.notify_methods or ["PUSH", "EMAIL"]
+        )
+        return alert
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/alerts/news")
+async def create_news_alert(user_id: str, req: NewsAlertRequest):
+    """Create news-based alert."""
+    from . import alerts_advanced
+    try:
+        alert = alerts_advanced.create_news_alert(
+            user_id=user_id,
+            symbol=req.symbol,
+            keywords=req.keywords,
+            sentiment=req.sentiment,
+            notify_methods=req.notify_methods or ["PUSH", "EMAIL"]
+        )
+        return alert
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/alerts/time")
+async def create_time_alert(user_id: str, req: TimeAlertRequest):
+    """Create time-based alert."""
+    from . import alerts_advanced
+    try:
+        alert = alerts_advanced.create_time_based_alert(
+            user_id=user_id,
+            symbol=req.symbol,
+            alert_time=req.alert_time,
+            message=req.message,
+            recurring=req.recurring,
+            days_of_week=req.days_of_week,
+            notify_methods=req.notify_methods or ["PUSH"]
+        )
+        return alert
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/alerts/composite")
+async def create_composite_alert(user_id: str, req: CompositeAlertRequest):
+    """Create composite alert with multiple conditions."""
+    from . import alerts_advanced
+    try:
+        alert = alerts_advanced.create_composite_alert(
+            user_id=user_id,
+            symbol=req.symbol,
+            conditions=req.conditions,
+            logic=req.logic,
+            notify_methods=req.notify_methods or ["PUSH"]
+        )
+        return alert
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/alerts")
+async def get_all_alerts(user_id: str):
+    """Get all alerts for user."""
+    from . import alerts_advanced
+    try:
+        alerts = alerts_advanced.get_all_alerts(user_id)
+        return alerts
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.put("/api/alerts/{alert_id}/toggle")
+async def toggle_alert(alert_id: int, alert_type: str, is_active: bool):
+    """Toggle alert on/off."""
+    from . import alerts_advanced
+    try:
+        success = alerts_advanced.toggle_alert(alert_id, alert_type, is_active)
+        return {"status": "ok" if success else "failed"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.delete("/api/alerts/{alert_id}")
+async def delete_alert(alert_id: int, alert_type: str):
+    """Delete an alert."""
+    from . import alerts_advanced
+    try:
+        success = alerts_advanced.delete_alert(alert_id, alert_type)
+        return {"status": "ok" if success else "failed"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/alerts/history")
+async def get_alert_history(user_id: str, limit: int = 50):
+    """Get alert trigger history."""
+    from . import alerts_advanced
+    try:
+        history = alerts_advanced.get_alert_history(user_id, limit)
+        return {"history": history, "count": len(history)}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/alerts/settings")
+async def configure_notification_settings(user_id: str, req: NotificationSettingsRequest):
+    """Configure notification settings."""
+    from . import alerts_advanced
+    try:
+        settings = alerts_advanced.configure_notification_settings(
+            user_id=user_id,
+            email=req.email,
+            push=req.push,
+            sms=req.sms,
+            telegram=req.telegram,
+            discord=req.discord,
+            quiet_hours=req.quiet_hours
+        )
+        return settings
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============= Stock Screener =============
+
+@app.get("/api/screener/gainers")
+async def get_gainers(limit: int = 20):
+    """Get top gaining stocks."""
+    from . import stock_screener
+    try:
+        gainers = stock_screener.screen_gainers()
+        return {"gainers": gainers[:limit], "count": len(gainers[:limit])}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/screener/losers")
+async def get_losers(limit: int = 20):
+    """Get top losing stocks."""
+    from . import stock_screener
+    try:
+        losers = stock_screener.screen_losers()
+        return {"losers": losers[:limit], "count": len(losers[:limit])}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/screener/rsi")
+async def screen_by_rsi(min_rsi: float = 0, max_rsi: float = 100):
+    """Screen stocks by RSI."""
+    from . import stock_screener
+    try:
+        results = stock_screener.screen_by_rsi(min_rsi, max_rsi)
+        return results
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/screener/macd")
+async def screen_by_macd():
+    """Screen stocks by MACD."""
+    from . import stock_screener
+    try:
+        results = stock_screener.screen_by_macd()
+        return results
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/screener/ma-cross")
+async def screen_by_ma():
+    """Screen stocks by moving average."""
+    from . import stock_screener
+    try:
+        results = stock_screener.screen_by_moving_average()
+        return results
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/screener/bollinger")
+async def screen_by_bollinger():
+    """Screen stocks by Bollinger Bands."""
+    from . import stock_screener
+    try:
+        results = stock_screener.screen_by_bollinger_bands()
+        return results
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/screener/volume")
+async def screen_by_volume(min_volume: float = 1000000):
+    """Screen stocks by volume."""
+    from . import stock_screener
+    try:
+        results = stock_screener.screen_by_volume(min_volume)
+        return {"results": results, "count": len(results)}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/screener/price")
+async def screen_by_price(min_price: float = 0, max_price: float = 10000):
+    """Screen stocks by price range."""
+    from . import stock_screener
+    try:
+        results = stock_screener.screen_by_price(min_price, max_price)
+        return {"results": results, "count": len(results)}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/market/stats")
+async def get_market_stats():
+    """Get market statistics."""
+    from . import stock_screener
+    try:
+        stats = stock_screener.get_market_stats()
+        return stats
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============= Backtesting =============
+
+@app.post("/api/backtest")
+async def run_strategy_backtest(
+    strategy_name: str,
+    symbol: str,
+    start_date: str,
+    end_date: str,
+    initial_capital: float = 100000
+):
+    """Run strategy backtest."""
+    from . import backtesting
+    try:
+        result = backtesting.run_strategy_backtest(
+            strategy_name=strategy_name,
+            symbol=symbol,
+            start_date=start_date,
+            end_date=end_date,
+            initial_capital=initial_capital
+        )
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/backtest/compare")
+async def compare_strategies(symbol: str, strategies: List[str]):
+    """Compare multiple strategies."""
+    from . import backtesting
+    try:
+        result = backtesting.compare_strategies(symbol, strategies)
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/backtest/monte-carlo")
+async def backtest_monte_carlo(
+    strategy_name: str,
+    symbol: str,
+    num_simulations: int = 1000
+):
+    """Run Monte Carlo backtest."""
+    from . import backtesting
+    try:
+        result = backtesting.backtest_with_monte_carlo(
+            strategy_name=strategy_name,
+            symbol=symbol,
+            historical_trades=[],
+            num_simulations=num_simulations
+        )
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/backtest/optimize")
+async def optimize_parameters(
+    strategy_name: str,
+    symbol: str,
+    param_ranges: Dict
+):
+    """Optimize strategy parameters."""
+    from . import backtesting
+    try:
+        result = backtesting.parameter_optimization(
+            strategy_name=strategy_name,
+            symbol=symbol,
+            param_ranges=param_ranges
+        )
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/backtest/portfolio")
+async def backtest_portfolio(
+    user_id: str,
+    symbols: List[str],
+    weights: List[float],
+    start_date: str,
+    end_date: str
+):
+    """Backtest portfolio."""
+    from . import backtesting
+    try:
+        result = backtesting.backtest_portfolio(
+            user_id=user_id,
+            portfolio_symbols=symbols,
+            weights=weights,
+            start_date=start_date,
+            end_date=end_date
+        )
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/backtest/results")
+async def get_backtest_results(symbol: str, limit: int = 10):
+    """Get backtest results."""
+    from . import backtesting
+    try:
+        results = backtesting.get_backtest_results(symbol, limit)
+        return {"results": results, "count": len(results)}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
