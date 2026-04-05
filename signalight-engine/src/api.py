@@ -1111,3 +1111,189 @@ async def get_sector_sentiment(sector: str):
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============= Phase 13: Real-time & Automation =============
+
+class AutoTradeRequest(BaseModel):
+    symbol: str
+    trigger_condition: str  # SIGNAL, PRICE, INDICATOR, TIME
+    trigger_value: float
+    action: str  # BUY, SELL
+    quantity: float
+
+
+class ConditionalOrderRequest(BaseModel):
+    symbol: str
+    condition_type: str  # PRICE_ABOVE, PRICE_BELOW, INDICATOR_CROSS, TIME_BASED
+    condition_value: float
+    action_type: str  # BUY, SELL, ALERT
+    quantity: float
+    order_price: float
+    expiry_date: Optional[str] = None
+
+
+class TradeSimulationRequest(BaseModel):
+    symbol: str
+    action: str
+    quantity: float
+    entry_price: float
+    exit_price: float
+    commission_rate: float = 0.001
+    tax_rate: float = 0.15
+
+
+@app.post("/api/auto-trades")
+async def create_auto_trade(user_id: str, req: AutoTradeRequest):
+    """Create an automated trading rule."""
+    from . import auto_trade_service
+    try:
+        rule = auto_trade_service.create_auto_trade_rule(
+            user_id=user_id,
+            symbol=req.symbol,
+            trigger_condition=req.trigger_condition,
+            trigger_value=req.trigger_value,
+            action=req.action,
+            quantity=req.quantity
+        )
+
+        return {"status": "ok", "rule": rule}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/auto-trades/{user_id}")
+async def get_auto_trades(user_id: str):
+    """Get all auto-trading rules for a user."""
+    from . import auto_trade_service
+    try:
+        rules = auto_trade_service.get_user_auto_trades(user_id)
+
+        return {"rules": rules, "count": len(rules)}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/auto-trades/{trade_id}/execute")
+async def execute_auto_trade(trade_id: int, execution_price: float, shares_executed: float):
+    """Execute an auto trade."""
+    from . import auto_trade_service
+    try:
+        result = auto_trade_service.execute_auto_trade(trade_id, execution_price, shares_executed)
+
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.delete("/api/auto-trades/{trade_id}")
+async def disable_auto_trade(trade_id: int):
+    """Disable an auto-trading rule."""
+    from . import auto_trade_service
+    try:
+        success = auto_trade_service.disable_auto_trade(trade_id)
+
+        return {"status": "ok" if success else "failed"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/conditional-orders")
+async def create_conditional_order(user_id: str, req: ConditionalOrderRequest):
+    """Create a conditional order (if-then rule)."""
+    from . import auto_trade_service
+    try:
+        order = auto_trade_service.create_conditional_order(
+            user_id=user_id,
+            symbol=req.symbol,
+            condition_type=req.condition_type,
+            condition_value=req.condition_value,
+            action_type=req.action_type,
+            quantity=req.quantity,
+            order_price=req.order_price,
+            expiry_date=req.expiry_date
+        )
+
+        return {"status": "ok", "order": order}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/conditional-orders/{user_id}")
+async def get_conditional_orders(user_id: str, status: str = "PENDING"):
+    """Get conditional orders for a user."""
+    from . import auto_trade_service
+    try:
+        orders = auto_trade_service.get_user_conditional_orders(user_id, status)
+
+        return {"orders": orders, "count": len(orders)}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/portfolio/{user_id}/hedging-suggestions")
+async def get_hedging_suggestions(user_id: str):
+    """Get automatic hedging suggestions for portfolio."""
+    from . import auto_trade_service
+    try:
+        suggestions = auto_trade_service.get_hedging_suggestions(user_id)
+
+        return {"suggestions": suggestions, "count": len(suggestions)}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/portfolio/{user_id}/apply-hedge")
+async def apply_hedge_strategy(user_id: str, symbol: str, hedge_type: str):
+    """Apply a hedging strategy to a position."""
+    from . import auto_trade_service
+    try:
+        result = auto_trade_service.apply_hedge_strategy(user_id, symbol, hedge_type)
+
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/simulate-trade")
+async def simulate_trade(req: TradeSimulationRequest):
+    """Simulate a trade including commissions and taxes."""
+    from . import auto_trade_service
+    try:
+        result = auto_trade_service.simulate_trade_with_costs(
+            symbol=req.symbol,
+            action=req.action,
+            quantity=req.quantity,
+            entry_price=req.entry_price,
+            exit_price=req.exit_price,
+            commission_rate=req.commission_rate,
+            tax_rate=req.tax_rate
+        )
+
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/auto-trades/{user_id}/execution-history")
+async def get_execution_history(user_id: str, limit: int = 50):
+    """Get execution history of auto trades."""
+    from . import auto_trade_service
+    try:
+        history = auto_trade_service.get_execution_history(user_id, limit)
+
+        return {"history": history, "count": len(history)}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/auto-trades/{user_id}/performance")
+async def get_auto_trade_performance(user_id: str):
+    """Get overall performance of auto-trading."""
+    from . import auto_trade_service
+    try:
+        performance = auto_trade_service.get_auto_trade_performance(user_id)
+
+        return performance
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
