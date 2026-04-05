@@ -3,6 +3,7 @@
 from datetime import datetime, timedelta
 from typing import Optional
 import asyncio
+import json
 
 from fastapi import FastAPI, HTTPException, WebSocket, Depends, status
 from fastapi.middleware.cors import CORSMiddleware
@@ -2317,5 +2318,87 @@ async def get_backtest_results(symbol: str, limit: int = 10):
     try:
         results = backtesting.get_backtest_results(symbol, limit)
         return {"results": results, "count": len(results)}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============= Real-time WebSocket Updates =============
+
+@app.websocket("/ws/realtime/{symbol}")
+async def websocket_realtime_updates(websocket: WebSocket, symbol: str):
+    """실시간 가격 및 차트 데이터 웹소켓 연결
+
+    사용 예시:
+    const ws = new WebSocket('ws://localhost:8000/ws/realtime/SPY');
+    ws.onmessage = (event) => {
+      const data = JSON.parse(event.data);
+      console.log(data.type, data.data); // price_update, chart_update, indicator_update
+    }
+    """
+    from . import realtime_updates
+    import uuid
+
+    connection_id = str(uuid.uuid4())
+
+    await websocket.accept()
+
+    try:
+        # 심볼 스트림 시작
+        await realtime_updates.StreamTask.start_stream(symbol)
+
+        # 연결 등록
+        await realtime_updates.realtime_manager.connect(
+            websocket, symbol.upper(), connection_id
+        )
+
+        # 클라이언트 메시지 수신 및 처리
+        while True:
+            data = await websocket.receive_text()
+            message = json.loads(data)
+
+            if message.get("type") == "subscribe":
+                new_symbol = message.get("symbol", "").upper()
+                if new_symbol:
+                    await realtime_updates.StreamTask.start_stream(new_symbol)
+                    await realtime_updates.realtime_manager.connect(
+                        websocket, new_symbol, connection_id
+                    )
+
+            elif message.get("type") == "unsubscribe":
+                unsub_symbol = message.get("symbol", "").upper()
+                if unsub_symbol:
+                    await realtime_updates.realtime_manager.disconnect(
+                        websocket, unsub_symbol, connection_id
+                    )
+
+            elif message.get("type") == "ping":
+                await websocket.send_json({"type": "pong", "timestamp": datetime.utcnow().isoformat()})
+
+    except Exception as e:
+        print(f"WebSocket error: {e}")
+    finally:
+        # 연결 정리
+        for sub_symbol in list(realtime_updates.realtime_manager.subscriptions.get(connection_id, set())):
+            await realtime_updates.realtime_manager.disconnect(websocket, sub_symbol, connection_id)
+
+        # 더 이상 구독자가 없으면 스트림 중지
+        if symbol.upper() not in realtime_updates.realtime_manager.active_connections:
+            await realtime_updates.StreamTask.stop_stream(symbol.upper())
+
+
+@app.get("/api/realtime/market-status")
+async def get_market_status():
+    """현재 시장 상태 조회"""
+    from . import realtime_updates
+    return realtime_updates.get_current_market_status()
+
+
+@app.get("/api/realtime/price/{symbol}")
+async def get_realtime_price(symbol: str):
+    """실시간 가격 조회 (WebSocket 없이)"""
+    from . import realtime_updates
+    try:
+        price_data = realtime_updates.get_price_update_for_symbol(symbol)
+        return price_data
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
