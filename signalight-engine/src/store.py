@@ -235,6 +235,290 @@ def init_db() -> None:
             CREATE INDEX IF NOT EXISTS idx_portfolio_targets_user ON portfolio_targets(user_id);
             CREATE INDEX IF NOT EXISTS idx_investment_goals_user ON investment_goals(user_id);
             CREATE INDEX IF NOT EXISTS idx_rebalance_history_user ON rebalance_history(user_id);
+            CREATE INDEX IF NOT EXISTS idx_signal_confidence ON signal_confidence(symbol, signal_type);
+            CREATE INDEX IF NOT EXISTS idx_news_signals_symbol ON news_signals(symbol);
+            CREATE INDEX IF NOT EXISTS idx_auto_trades_user ON auto_trades(user_id);
+            CREATE INDEX IF NOT EXISTS idx_community_posts_user ON community_posts(user_id);
+            CREATE INDEX IF NOT EXISTS idx_leaderboard_month ON leaderboard(month);
+
+            -- Phase 11: AI & 머신러닝
+            CREATE TABLE IF NOT EXISTS signal_confidence (
+                id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+                signal_id          INTEGER NOT NULL,
+                symbol             TEXT,
+                signal_type        TEXT,
+                confidence_score   REAL DEFAULT 0,
+                accuracy_history   TEXT,
+                ml_probability     REAL,
+                last_updated       DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (signal_id) REFERENCES signals(id)
+            );
+
+            CREATE TABLE IF NOT EXISTS ml_predictions (
+                id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id            TEXT,
+                symbol             TEXT,
+                entry_price_pred   REAL,
+                exit_price_pred    REAL,
+                confidence         REAL,
+                model_type         TEXT,
+                created_at         DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users(id)
+            );
+
+            CREATE TABLE IF NOT EXISTS sentiment_analysis (
+                id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+                symbol             TEXT,
+                source             TEXT,
+                sentiment_score    REAL,
+                text_content       TEXT,
+                analyzed_at        DATETIME DEFAULT CURRENT_TIMESTAMP
+            );
+
+            CREATE TABLE IF NOT EXISTS user_profiles (
+                id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id            TEXT UNIQUE,
+                risk_profile       TEXT,
+                experience_level   TEXT,
+                preferred_signals  TEXT,
+                created_at         DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users(id)
+            );
+
+            -- Phase 12: 뉴스 & 경제
+            CREATE TABLE IF NOT EXISTS news_signals (
+                id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+                symbol             TEXT,
+                title              TEXT,
+                content            TEXT,
+                source             TEXT,
+                sentiment          TEXT,
+                impact_score       REAL,
+                published_at       DATETIME,
+                created_at         DATETIME DEFAULT CURRENT_TIMESTAMP
+            );
+
+            CREATE TABLE IF NOT EXISTS economic_calendar (
+                id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+                event_name         TEXT,
+                country            TEXT,
+                event_date         DATETIME,
+                expected_value     REAL,
+                actual_value       REAL,
+                forecast_value     REAL,
+                importance         TEXT,
+                created_at         DATETIME DEFAULT CURRENT_TIMESTAMP
+            );
+
+            -- Phase 13: 자동화
+            CREATE TABLE IF NOT EXISTS auto_trades (
+                id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id            TEXT,
+                symbol             TEXT,
+                action             TEXT,
+                quantity           REAL,
+                entry_price        REAL,
+                stop_loss          REAL,
+                take_profit        REAL,
+                status             TEXT DEFAULT 'PENDING',
+                created_at         DATETIME DEFAULT CURRENT_TIMESTAMP,
+                executed_at        DATETIME,
+                FOREIGN KEY (user_id) REFERENCES users(id)
+            );
+
+            CREATE TABLE IF NOT EXISTS trade_conditions (
+                id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id            TEXT,
+                name               TEXT,
+                condition_json     TEXT,
+                is_active          BOOLEAN DEFAULT 1,
+                created_at         DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users(id)
+            );
+
+            -- Phase 14: 교육
+            CREATE TABLE IF NOT EXISTS courses (
+                id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+                title              TEXT,
+                description        TEXT,
+                level              TEXT,
+                content            TEXT,
+                video_url          TEXT,
+                created_at         DATETIME DEFAULT CURRENT_TIMESTAMP
+            );
+
+            CREATE TABLE IF NOT EXISTS user_courses (
+                id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id            TEXT,
+                course_id          INTEGER,
+                progress           REAL DEFAULT 0,
+                completed          BOOLEAN DEFAULT 0,
+                created_at         DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users(id),
+                FOREIGN KEY (course_id) REFERENCES courses(id)
+            );
+
+            -- Phase 16: 커뮤니티
+            CREATE TABLE IF NOT EXISTS community_posts (
+                id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id            TEXT,
+                title              TEXT,
+                content            TEXT,
+                likes              INTEGER DEFAULT 0,
+                created_at         DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users(id)
+            );
+
+            CREATE TABLE IF NOT EXISTS community_comments (
+                id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+                post_id            INTEGER,
+                user_id            TEXT,
+                content            TEXT,
+                created_at         DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (post_id) REFERENCES community_posts(id),
+                FOREIGN KEY (user_id) REFERENCES users(id)
+            );
+
+            CREATE TABLE IF NOT EXISTS user_follows (
+                id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+                follower_id        TEXT,
+                following_id       TEXT,
+                created_at         DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (follower_id) REFERENCES users(id),
+                FOREIGN KEY (following_id) REFERENCES users(id)
+            );
+
+            -- Phase 18: 리스크 관리
+            CREATE TABLE IF NOT EXISTS risk_limits (
+                id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id            TEXT UNIQUE,
+                daily_loss_limit   REAL,
+                monthly_loss_limit REAL,
+                position_size_max  REAL,
+                created_at         DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users(id)
+            );
+
+            CREATE TABLE IF NOT EXISTS stop_loss_rules (
+                id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id            TEXT,
+                symbol             TEXT,
+                stop_loss_percent  REAL,
+                take_profit_percent REAL,
+                trailing_stop      BOOLEAN,
+                created_at         DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users(id)
+            );
+
+            -- Phase 19: 브로커 통합
+            CREATE TABLE IF NOT EXISTS broker_accounts (
+                id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id            TEXT,
+                broker_name        TEXT,
+                account_id         TEXT,
+                api_key            TEXT,
+                is_connected       BOOLEAN DEFAULT 0,
+                created_at         DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users(id)
+            );
+
+            -- Phase 20: 게임화
+            CREATE TABLE IF NOT EXISTS user_badges (
+                id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id            TEXT,
+                badge_name         TEXT,
+                badge_type         TEXT,
+                earned_at          DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users(id)
+            );
+
+            CREATE TABLE IF NOT EXISTS leaderboard (
+                id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id            TEXT,
+                month              TEXT,
+                total_return       REAL,
+                rank               INTEGER,
+                updated_at         DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users(id)
+            );
+
+            -- Phase 22: 수익화
+            CREATE TABLE IF NOT EXISTS referrals (
+                id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+                referrer_id        TEXT,
+                referee_id         TEXT,
+                commission_amount  REAL,
+                status             TEXT DEFAULT 'PENDING',
+                created_at         DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (referrer_id) REFERENCES users(id),
+                FOREIGN KEY (referee_id) REFERENCES users(id)
+            );
+
+            CREATE TABLE IF NOT EXISTS user_credits (
+                id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id            TEXT UNIQUE,
+                credits            REAL DEFAULT 0,
+                total_earned       REAL DEFAULT 0,
+                updated_at         DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users(id)
+            );
+
+            -- Phase 24: 국제화
+            CREATE TABLE IF NOT EXISTS crypto_assets (
+                id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id            TEXT,
+                symbol             TEXT,
+                quantity           REAL,
+                entry_price        REAL,
+                current_price      REAL,
+                blockchain         TEXT,
+                created_at         DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users(id)
+            );
+
+            CREATE TABLE IF NOT EXISTS language_preferences (
+                id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id            TEXT UNIQUE,
+                language           TEXT DEFAULT 'en',
+                region             TEXT,
+                created_at         DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users(id)
+            );
+
+            -- Phase 25: 특이 기능
+            CREATE TABLE IF NOT EXISTS mirror_trades (
+                id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id            TEXT,
+                mentor_id          TEXT,
+                is_active          BOOLEAN DEFAULT 1,
+                copy_percentage    REAL DEFAULT 100,
+                created_at         DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users(id),
+                FOREIGN KEY (mentor_id) REFERENCES users(id)
+            );
+
+            CREATE TABLE IF NOT EXISTS trading_journal (
+                id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id            TEXT,
+                trade_date         DATE,
+                symbol             TEXT,
+                entry_price        REAL,
+                exit_price         REAL,
+                notes              TEXT,
+                emotion            TEXT,
+                created_at         DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users(id)
+            );
+
+            CREATE TABLE IF NOT EXISTS net_worth_tracker (
+                id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id            TEXT,
+                total_assets       REAL,
+                total_liabilities  REAL,
+                net_worth          REAL,
+                tracked_at         DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users(id)
+            );
         """)
     _seed_watchlist()
     logger.info("SQLite database initialised with analytics tables")

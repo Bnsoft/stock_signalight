@@ -1,8 +1,8 @@
-# Signalight
+# Signalight - Professional Stock Trading Platform
 
 > Signal + Light — When the signal fires, you see the light.
 
-A personal stock signal scanner and dashboard that monitors ETFs and stocks using technical indicators, sends real-time alerts via Telegram, and provides an AI-powered web dashboard for analysis.
+A comprehensive, professional-grade stock trading platform for US stocks and crypto monitoring. Features real-time alerts, technical analysis, backtesting, portfolio management, and broker integrations with a modern web-based interface.
 
 ## Architecture
 
@@ -46,39 +46,122 @@ signalight/
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-## Features
+## Core Features
 
-### Signal Detection
-- **Moving Averages** — MA20, MA60 crossover detection (Golden Cross / Death Cross)
-- **RSI** — Oversold (< 30) and overbought (> 70) alerts
-- **MACD** — Momentum shift detection
-- **Bollinger Bands** — Price breakout alerts
-- **Drawdown Levels** — QQQ drawdown-based staged entry signals for leveraged ETFs
+### 🚨 Alert System (7 Types)
+- **Price Alerts** — Monitor specific price levels with above/below conditions
+- **Indicator Alerts** — RSI, MACD, Bollinger Bands, ATR, Stochastic signals
+- **Volume Alerts** — Track unusual trading volume spikes
+- **Portfolio Alerts** — Monitor overall portfolio performance metrics
+- **News Alerts** — Symbol-specific news event tracking
+- **Time-Based Alerts** — Scheduled notifications at specific times
+- **Composite Alerts** — Multi-condition alerts with AND/OR logic
+- **Multi-Channel Notifications** — Push, Email, SMS, Telegram, Discord
 
-### Telegram Bot (Bidirectional)
-| Command | Description |
-|---------|-------------|
-| `/scan` | Trigger immediate scan |
-| `/status` | Scanner health check |
-| `/price QQQ` | Price + all indicators |
-| `/signals` | Recent signal history |
-| `/watchlist` | Current watchlist |
-| `/add AAPL` | Add symbol |
-| `/remove AAPL` | Remove symbol |
-| `/report` | Full daily report |
-| `/news QQQ` | AI news analysis (Phase 3) |
+### 📊 Technical Analysis & Screener
+- **Stock Screener** — 8 preset screens (Gainers, Losers, RSI, MACD, Volume, MA Cross, Bollinger)
+- **Real-time Indicators** — SMA, EMA, RSI, MACD, Bollinger Bands, ATR, Stochastic
+- **Chart Analysis** — Multiple timeframes (1m, 5m, 15m, 1h, 4h, 1d, 1w)
+- **Market Statistics** — Advancing/Declining stocks, sector performance, VIX
 
-### Web Dashboard (Phase 2+)
-- Real-time signal feed (Supabase Realtime)
-- TradingView candlestick charts with indicator overlays
-- Watchlist management UI
-- Signal threshold configuration
-- PWA — installable on mobile
+### 🔬 Advanced Analysis Tools
+- **Backtesting** — Strategy testing with historical data, parameter optimization, Monte Carlo simulation
+- **Portfolio Analysis** — Asset allocation, sector analysis, correlation matrix, efficient frontier
+- **Options Analysis** — Options chain, Greeks (Delta, Gamma, Theta, Vega, Rho), implied volatility
+- **Performance Attribution** — Contribution analysis by position, dividend tracking
 
-### AI Analysis (Phase 3)
-- Automated news sentiment analysis via Claude API
-- Combined technical + sentiment signal scoring
-- Per-symbol AI summary and risk assessment
+### 📰 News & Events
+- **News Feed** — Latest market news with sentiment analysis
+- **Earnings Calendar** — Earnings dates with forecasts and surprises
+- **Economic Calendar** — Major economic events with impact indicators
+- **IPO Calendar** — Upcoming IPOs and company announcements
+- **Sector News** — Industry-specific news aggregation
+
+### 🔗 Broker Integration
+- **Multiple Brokers** — Interactive Brokers, Alpaca, TD Ameritrade
+- **Account Management** — Real-time account info, balances, buying power
+- **Position Tracking** — Current positions with unrealized gains/losses
+- **Order Management** — View, place, and cancel orders
+- **Trade History** — Complete trade history with commission tracking
+
+### 📈 Market Data
+- **US Stocks** — Real-time quotes and fundamentals (Primary focus)
+- **Crypto Monitoring** — BTC, ETH, and major cryptocurrencies (View-only)
+- **Futures** — Index and commodity futures data
+- **Forex** — Major currency pairs with bid/ask spreads
+- **Bonds** — Treasury and corporate bond analysis with yield curves
+
+### 💾 Data Export
+- **Multiple Formats** — CSV, Excel, PDF, JSON exports
+- **Portfolio Export** — Current holdings with formatting
+- **Reports** — Monthly and annual performance reports
+- **Backtest Results** — Export strategy results for external analysis
+- **Transaction History** — Complete trade and transaction records
+
+### 🌐 Real-time Updates
+- **WebSocket Streaming** — Real-time price updates and indicators
+- **Portfolio Updates** — Live watchlist and position tracking
+- **Alert Triggers** — Instant notifications when conditions met
+- **Multi-symbol Support** — Track multiple symbols simultaneously
+
+## Dashboard Pages
+
+### 📱 Available Pages
+1. **Overview** — Portfolio summary and key metrics
+2. **Alerts** — Alert management with 7 types and multi-channel notifications
+3. **Screener** — Stock screening with 8 preset filters
+4. **Backtesting** — Strategy testing and optimization
+5. **Charts** — Advanced technical analysis with multiple indicators
+6. **Options** — Options chain, Greeks, and strategy analysis
+7. **Portfolio Analysis** — Detailed portfolio metrics and rebalancing
+8. **News & Events** — News feed, earnings, economic calendar
+9. **Market Overview** — Market indices, sectors, crypto, futures
+10. **Broker Integration** — Broker account management and trading
+11. **Data Export** — Export portfolio and reports in multiple formats
+12. **Advanced Trading** — Order creation and management
+
+## Technology Stack
+
+### Backend
+- **Framework** — FastAPI with async/await
+- **Database** — SQLite with optimized queries
+- **Real-time** — WebSocket for live updates
+- **APIs** — Broker integrations (Interactive Brokers, Alpaca, TD Ameritrade)
+
+### Frontend
+- **Framework** — Next.js 16 with React 18
+- **Language** — TypeScript
+- **Styling** — Tailwind CSS with dark mode
+- **Charts** — Lightweight Charts library
+- **State Management** — React hooks and Context API
+
+### Data Processing
+- **Technical Analysis** — pandas-ta, NumPy, SciPy
+- **Options Pricing** — Black-Scholes model, Newton-Raphson IV
+- **Portfolio Analysis** — Modern Portfolio Theory, correlation matrices
+
+## Installation
+
+### Prerequisites
+- Python 3.9+
+- Node.js 18+
+- npm or yarn
+
+### Backend Setup
+```bash
+cd signalight-engine
+pip install -r requirements.txt
+python -m src.main
+# API runs on http://localhost:8000
+```
+
+### Frontend Setup
+```bash
+cd signalight-web/signalight-landing
+npm install
+npm run dev
+# Web runs on http://localhost:3000
+```
 
 ## Default Watchlist
 
@@ -88,16 +171,10 @@ signalight/
 | SPY | SPDR S&P 500 | Index ETF |
 | TQQQ | ProShares UltraPro QQQ | 3x Leveraged |
 | QLD | ProShares Ultra QQQ | 2x Leveraged |
-| SPYI | NEOS S&P 500 High Income | Covered Call |
-| QQQI | NEOS Nasdaq-100 High Income | Covered Call |
-| JEPQ | JPMorgan Nasdaq Equity Premium Income | Covered Call |
-
-## Drawdown Entry Strategy
-
-Staged entry levels triggered by QQQ drawdown from all-time high:
-
-| QQQ Drawdown | Action |
-|--------------|--------|
+| AAPL | Apple Inc. | Technology |
+| MSFT | Microsoft Corporation | Technology |
+| TSLA | Tesla Inc. | Automotive |
+| NVDA | NVIDIA Corporation | Semiconductors |
 | -10% | Start buying QLD |
 | -15% | Add TQQQ small position |
 | -20% | Increase TQQQ allocation |
