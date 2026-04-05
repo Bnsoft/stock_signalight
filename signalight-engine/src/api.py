@@ -1732,3 +1732,126 @@ async def get_risk_summary(user_id: str):
         return summary
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============= Phases 17-25: Advanced Features =============
+
+@app.get("/api/user/{user_id}/premium-advisor")
+async def get_premium_advisor(user_id: str):
+    """Get AI portfolio advisor."""
+    from . import advanced_features
+    try:
+        advisor = advanced_features.get_premium_advisor(user_id)
+        return advisor
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/user/{user_id}/badges")
+async def get_user_badges(user_id: str):
+    """Get user's earned badges."""
+    from . import advanced_features
+    try:
+        badges = advanced_features.get_user_badges(user_id)
+        return {"badges": badges}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/badges/available")
+async def get_available_badges():
+    """Get all available badges."""
+    from . import advanced_features
+    try:
+        badges = advanced_features.get_available_badges()
+        return {"badges": badges}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/user/{user_id}/points")
+async def get_user_points(user_id: str):
+    """Get user's point balance."""
+    from . import advanced_features
+    try:
+        points = advanced_features.get_user_points(user_id)
+        return points
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/user/{user_id}/referral")
+async def create_referral_link(user_id: str):
+    """Create referral link."""
+    from . import advanced_features
+    try:
+        referral = advanced_features.create_referral_link(user_id)
+        return referral
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/user/{user_id}/referral-stats")
+async def get_referral_stats(user_id: str):
+    """Get referral statistics."""
+    from . import advanced_features
+    try:
+        stats = advanced_features.get_referral_stats(user_id)
+        return stats
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/user/{user_id}/stress-test")
+async def stress_test_portfolio(user_id: str, scenario: str = "2008_CRISIS"):
+    """Run portfolio stress test."""
+    from . import advanced_features
+    try:
+        result = advanced_features.stress_test_portfolio(user_id, scenario)
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/user/{user_id}/net-worth")
+async def track_net_worth(user_id: str):
+    """Track total net worth."""
+    from . import advanced_features
+    try:
+        net_worth = advanced_features.track_net_worth(user_id)
+        return net_worth
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/etf/{symbol}")
+async def get_etf_analysis(symbol: str):
+    """Get detailed ETF analysis."""
+    from . import advanced_features
+    try:
+        analysis = advanced_features.get_etf_analysis(symbol)
+        return analysis
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/user/{user_id}/mirror-traders")
+async def get_mirror_traders(user_id: str):
+    """Get available traders to mirror."""
+    from . import advanced_features
+    try:
+        traders = advanced_features.get_mirror_traders(user_id)
+        return {"traders": traders}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/user/{user_id}/mirror/{trader_id}")
+async def start_mirror_trading(user_id: str, trader_id: str, allocation_percent: float):
+    """Start mirroring trades."""
+    from . import advanced_features
+    try:
+        result = advanced_features.start_mirror_trading(user_id, trader_id, allocation_percent)
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
