@@ -12,6 +12,7 @@ from . import (
     routes_broker,
     routes_export,
     routes_settings,
+    routes_dashboard,
 )
 from . import alerts_advanced
 from . import stock_screener
@@ -60,6 +61,7 @@ app.add_middleware(
 app.include_router(routes_broker.router)
 app.include_router(routes_export.router)
 app.include_router(routes_settings.router)
+app.include_router(routes_dashboard.router)
 
 
 # ============= Alert Routes =============
