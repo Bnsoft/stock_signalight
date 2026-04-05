@@ -3,7 +3,11 @@
 import { useState } from "react"
 import { useAuth } from "@/context/AuthContext"
 import { AnimateIn } from "@/components/layout/AnimateIn"
-import { Save, Bell, Lock, User, Sliders, Database } from "lucide-react"
+import { Save, Bell, Lock, User, Sliders, Database, AlertCircle } from "lucide-react"
+import { useToast } from "@/hooks/useToast"
+import { ToastContainer } from "@/components/ToastContainer"
+import { validateEmail, validateRequired, FormError } from "@/utils/validation"
+import { getErrorMessage } from "@/utils/validation"
 
 type SettingsTab = "profile" | "notifications" | "preferences" | "security" | "data"
 
@@ -11,8 +15,10 @@ const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"
 
 export default function SettingsPage() {
   const { user, token } = useAuth()
+  const { toasts, removeToast, success, error: showError } = useToast()
   const [activeTab, setActiveTab] = useState<SettingsTab>("profile")
   const [saving, setSaving] = useState(false)
+  const [formErrors, setFormErrors] = useState<{ [key: string]: string }>({})
   const [profile, setProfile] = useState({
     name: user?.name || "사용자",
     email: user?.email || "",
@@ -32,9 +38,28 @@ export default function SettingsPage() {
   })
 
   const handleSaveProfile = async () => {
+    // 검증
+    const errors: { [key: string]: string } = {}
+
+    if (!profile.name.trim()) {
+      errors.name = "이름을 입력하세요"
+    }
+
+    if (!validateEmail(profile.email)) {
+      errors.email = "유효한 이메일을 입력하세요"
+    }
+
+    if (Object.keys(errors).length > 0) {
+      setFormErrors(errors)
+      showError("입력 값을 확인하세요")
+      return
+    }
+
     setSaving(true)
+    setFormErrors({})
+
     try {
-      await fetch(`${API_BASE}/api/users/profile`, {
+      const res = await fetch(`${API_BASE}/api/users/profile`, {
         method: "PUT",
         headers: {
           Authorization: `Bearer ${token}`,
@@ -42,6 +67,15 @@ export default function SettingsPage() {
         },
         body: JSON.stringify(profile),
       })
+
+      if (!res.ok) {
+        throw new Error("프로필 저장에 실패했습니다")
+      }
+
+      success("프로필이 저장되었습니다")
+    } catch (err) {
+      const message = getErrorMessage(err)
+      showError(message)
     } finally {
       setSaving(false)
     }
@@ -99,25 +133,52 @@ export default function SettingsPage() {
                       </div>
                     </div>
 
+                    {formErrors.profile && (
+                      <div className="bg-red-600/10 border border-red-600 rounded-lg p-4 mb-4 flex gap-3">
+                        <AlertCircle className="text-red-600 flex-shrink-0 mt-0.5" size={18} />
+                        <p className="text-sm text-red-600">{formErrors.profile}</p>
+                      </div>
+                    )}
+
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                       <div>
-                        <label className="block text-sm font-semibold mb-2">이름</label>
+                        <label className="block text-sm font-semibold mb-2">
+                          이름 {formErrors.name && <span className="text-red-600 text-xs">*</span>}
+                        </label>
                         <input
                           type="text"
                           value={profile.name}
-                          onChange={(e) => setProfile({ ...profile, name: e.target.value })}
-                          className="w-full px-4 py-2 bg-muted border border-border rounded-lg text-foreground"
+                          onChange={(e) => {
+                            setProfile({ ...profile, name: e.target.value })
+                            if (formErrors.name) setFormErrors({ ...formErrors, name: "" })
+                          }}
+                          className={`w-full px-4 py-2 bg-muted border rounded-lg text-foreground transition-colors ${
+                            formErrors.name ? "border-red-600" : "border-border"
+                          }`}
                         />
+                        {formErrors.name && (
+                          <p className="text-xs text-red-600 mt-1">{formErrors.name}</p>
+                        )}
                       </div>
 
                       <div>
-                        <label className="block text-sm font-semibold mb-2">이메일</label>
+                        <label className="block text-sm font-semibold mb-2">
+                          이메일 {formErrors.email && <span className="text-red-600 text-xs">*</span>}
+                        </label>
                         <input
                           type="email"
                           value={profile.email}
-                          onChange={(e) => setProfile({ ...profile, email: e.target.value })}
-                          className="w-full px-4 py-2 bg-muted border border-border rounded-lg text-foreground"
+                          onChange={(e) => {
+                            setProfile({ ...profile, email: e.target.value })
+                            if (formErrors.email) setFormErrors({ ...formErrors, email: "" })
+                          }}
+                          className={`w-full px-4 py-2 bg-muted border rounded-lg text-foreground transition-colors ${
+                            formErrors.email ? "border-red-600" : "border-border"
+                          }`}
                         />
+                        {formErrors.email && (
+                          <p className="text-xs text-red-600 mt-1">{formErrors.email}</p>
+                        )}
                       </div>
 
                       <div>
@@ -364,6 +425,8 @@ export default function SettingsPage() {
           </div>
         </AnimateIn>
       </div>
+
+      <ToastContainer toasts={toasts} onRemove={removeToast} />
     </div>
   )
 }

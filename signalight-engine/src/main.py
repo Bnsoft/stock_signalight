@@ -25,6 +25,7 @@ from . import advanced_trading
 
 # Import realtime updates
 from .realtime_updates import RealtimeUpdateManager
+from .error_handlers import setup_error_handlers
 
 # Initialize realtime manager
 realtime_manager = RealtimeUpdateManager()
@@ -56,6 +57,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Setup error handlers
+setup_error_handlers(app)
 
 # Include routers
 app.include_router(routes_broker.router)
