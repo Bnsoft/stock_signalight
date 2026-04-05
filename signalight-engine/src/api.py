@@ -1431,3 +1431,177 @@ async def get_learning_progress(user_id: str):
         return progress
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============= Phase 16: Social & Community =============
+
+class CommunityPostRequest(BaseModel):
+    title: str
+    content: str
+    signal_id: Optional[int] = None
+    symbol: Optional[str] = None
+    post_type: str = "DISCUSSION"
+
+
+class CommentRequest(BaseModel):
+    content: str
+
+
+@app.post("/api/community/posts")
+async def create_community_post(user_id: str, req: CommunityPostRequest):
+    """Create a community post."""
+    from . import community
+    try:
+        post = community.create_post(
+            user_id=user_id,
+            title=req.title,
+            content=req.content,
+            signal_id=req.signal_id,
+            symbol=req.symbol,
+            post_type=req.post_type
+        )
+
+        return {"status": "ok", "post": post}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/community/feed")
+async def get_community_feed(limit: int = 20, post_type: Optional[str] = None):
+    """Get community feed."""
+    from . import community
+    try:
+        posts = community.get_community_feed(limit, post_type)
+
+        return {
+            "posts": posts,
+            "count": len(posts)
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/community/posts/{post_id}/like")
+async def like_post(user_id: str, post_id: int):
+    """Like a community post."""
+    from . import community
+    try:
+        liked = community.like_post(user_id, post_id)
+
+        return {"post_id": post_id, "liked": liked}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/community/posts/{post_id}/comments")
+async def comment_on_post(post_id: int, user_id: str, req: CommentRequest):
+    """Comment on a post."""
+    from . import community
+    try:
+        comment = community.comment_on_post(user_id, post_id, req.content)
+
+        return comment
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/community/posts/{post_id}/comments")
+async def get_post_comments(post_id: int, limit: int = 20):
+    """Get comments for a post."""
+    from . import community
+    try:
+        comments = community.get_post_comments(post_id, limit)
+
+        return {
+            "comments": comments,
+            "count": len(comments)
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/users/{following_id}/follow")
+async def follow_user(user_id: str, following_id: str):
+    """Follow another user."""
+    from . import community
+    try:
+        followed = community.follow_user(user_id, following_id)
+
+        return {"following_id": following_id, "followed": followed}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/user/{user_id}/followers")
+async def get_followers(user_id: str):
+    """Get followers of a user."""
+    from . import community
+    try:
+        followers = community.get_followers(user_id)
+
+        return {"followers": followers, "count": len(followers)}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/user/{user_id}/following")
+async def get_following(user_id: str):
+    """Get users that a user is following."""
+    from . import community
+    try:
+        following = community.get_following(user_id)
+
+        return {"following": following, "count": len(following)}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/user/{user_id}/investor-matches")
+async def find_investor_matches(user_id: str):
+    """Find investors with similar trading style."""
+    from . import community
+    try:
+        matches = community.find_investor_matches(user_id)
+
+        return {"matches": matches, "count": len(matches)}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/leaderboard")
+async def get_leaderboard(period: str = "MONTHLY", limit: int = 20):
+    """Get leaderboard by performance."""
+    from . import community
+    try:
+        leaderboard = community.get_leaderboard(period, limit)
+
+        return {"leaderboard": leaderboard, "period": period}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/user/{user_id}/leaderboard-rank")
+async def get_user_rank(user_id: str, period: str = "MONTHLY"):
+    """Get user's rank on leaderboard."""
+    from . import community
+    try:
+        rank = community.get_user_rank(user_id, period)
+
+        if not rank:
+            raise HTTPException(status_code=404, detail="User not ranked yet")
+
+        return rank
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/challenges")
+async def get_monthly_challenges():
+    """Get current monthly trading challenges."""
+    from . import community
+    try:
+        challenges = community.get_monthly_challenges()
+
+        return {"challenges": challenges, "count": len(challenges)}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
