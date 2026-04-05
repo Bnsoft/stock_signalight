@@ -1297,3 +1297,137 @@ async def get_auto_trade_performance(user_id: str):
         return performance
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============= Phase 14: Education & Learning =============
+
+@app.get("/api/courses")
+async def get_courses(category: Optional[str] = None, level: Optional[str] = None):
+    """Get available courses."""
+    from . import courses
+    try:
+        course_list = courses.get_courses(category, level)
+
+        return {
+            "courses": course_list,
+            "count": len(course_list),
+            "filters": {
+                "category": category,
+                "level": level
+            }
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/courses/{course_id}")
+async def get_course_details(course_id: int):
+    """Get detailed course information."""
+    from . import courses
+    try:
+        course = courses.get_course_details(course_id)
+        if not course:
+            raise HTTPException(status_code=404, detail="Course not found")
+
+        return course
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/courses/{course_id}/enroll")
+async def enroll_in_course(user_id: str, course_id: int):
+    """Enroll user in a course."""
+    from . import courses
+    try:
+        result = courses.enroll_in_course(user_id, course_id)
+
+        if "error" in result:
+            raise HTTPException(status_code=400, detail=result["error"])
+
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/user/{user_id}/courses")
+async def get_user_courses(user_id: str):
+    """Get courses user is enrolled in."""
+    from . import courses
+    try:
+        user_courses = courses.get_user_courses(user_id)
+
+        return {
+            "courses": user_courses,
+            "count": len(user_courses)
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.put("/api/user/{user_id}/courses/{course_id}/progress")
+async def update_course_progress(user_id: str, course_id: int, progress_percent: float):
+    """Update user's progress in a course."""
+    from . import courses
+    try:
+        result = courses.update_course_progress(user_id, course_id, progress_percent)
+
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/signals/{signal_type}/guide")
+async def get_signal_guide(signal_type: str):
+    """Get interpretation guide for a signal type."""
+    from . import courses
+    try:
+        guide = courses.get_signal_guide(signal_type)
+
+        return {
+            "signal_type": signal_type,
+            "guide": guide
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/case-studies")
+async def get_case_studies(category: Optional[str] = None):
+    """Get success and failure case studies."""
+    from . import courses
+    try:
+        studies = courses.get_case_studies(category)
+
+        return {
+            "case_studies": studies,
+            "count": len(studies)
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/user/{user_id}/course-recommendations")
+async def get_learning_recommendations(user_id: str):
+    """Get personalized course recommendations."""
+    from . import courses
+    try:
+        recommendations = courses.get_learning_recommendations(user_id)
+
+        return {
+            "recommendations": recommendations,
+            "count": len(recommendations)
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/user/{user_id}/learning-progress")
+async def get_learning_progress(user_id: str):
+    """Track user's overall learning progress."""
+    from . import courses
+    try:
+        progress = courses.track_learning_progress(user_id)
+
+        return progress
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
