@@ -1605,3 +1605,130 @@ async def get_monthly_challenges():
         return {"challenges": challenges, "count": len(challenges)}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============= Phase 18: Risk Management =============
+
+@app.post("/api/user/{user_id}/risk-limits/daily")
+async def set_daily_loss_limit(user_id: str, daily_loss_amount: float):
+    """Set maximum daily loss limit."""
+    from . import risk_management
+    try:
+        result = risk_management.set_daily_loss_limit(user_id, daily_loss_amount)
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/user/{user_id}/risk-limits/monthly")
+async def set_monthly_loss_limit(user_id: str, monthly_loss_amount: float):
+    """Set maximum monthly loss limit."""
+    from . import risk_management
+    try:
+        result = risk_management.set_monthly_loss_limit(user_id, monthly_loss_amount)
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/user/{user_id}/risk-limits")
+async def get_risk_limits(user_id: str):
+    """Get user's risk limits."""
+    from . import risk_management
+    try:
+        limits = risk_management.get_risk_limits(user_id)
+        return limits
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/user/{user_id}/var")
+async def get_var(user_id: str, confidence_level: float = 0.95):
+    """Calculate Value at Risk for portfolio."""
+    from . import risk_management
+    try:
+        var = risk_management.calculate_var(user_id, confidence_level)
+        return var
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/user/{user_id}/expected-shortfall")
+async def get_expected_shortfall(user_id: str, confidence_level: float = 0.95):
+    """Calculate Expected Shortfall."""
+    from . import risk_management
+    try:
+        es = risk_management.calculate_expected_shortfall(user_id, confidence_level)
+        return es
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/stop-loss-rules")
+async def create_stop_loss_rule(
+    user_id: str,
+    symbol: str,
+    stop_loss_percent: float,
+    take_profit_percent: Optional[float] = None,
+    is_trailing: bool = False
+):
+    """Create stop loss rule."""
+    from . import risk_management
+    try:
+        rule = risk_management.create_stop_loss_rule(
+            user_id, symbol, stop_loss_percent, take_profit_percent, is_trailing
+        )
+        return rule
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/stop-loss-rules/{user_id}")
+async def get_stop_loss_rules(user_id: str):
+    """Get stop loss rules."""
+    from . import risk_management
+    try:
+        rules = risk_management.get_stop_loss_rules(user_id)
+        return {"rules": rules, "count": len(rules)}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/position-size")
+async def calculate_position_size(
+    account_size: float,
+    risk_percent: float,
+    entry_price: float,
+    stop_loss_price: float
+):
+    """Calculate optimal position size."""
+    from . import risk_management
+    try:
+        result = risk_management.calculate_position_size(
+            account_size, risk_percent, entry_price, stop_loss_price
+        )
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/user/{user_id}/portfolio-risk")
+async def analyze_portfolio_risk(user_id: str):
+    """Analyze portfolio risk."""
+    from . import risk_management
+    try:
+        risk = risk_management.analyze_portfolio_risk(user_id)
+        return risk
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/user/{user_id}/risk-summary")
+async def get_risk_summary(user_id: str):
+    """Get comprehensive risk summary."""
+    from . import risk_management
+    try:
+        summary = risk_management.get_risk_summary(user_id)
+        return summary
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
