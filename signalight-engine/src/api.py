@@ -818,3 +818,183 @@ async def get_rebalance_suggestion(user_id: str):
         return suggestion
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============= Phase 11: AI & Machine Learning =============
+
+class SentimentAnalysisRequest(BaseModel):
+    content: str
+    source: str = "news"
+
+
+class SentimentAnalyzeRequest(BaseModel):
+    content: str
+    source: Optional[str] = "news"
+
+
+@app.post("/api/signals/{signal_id}/confidence")
+async def get_signal_confidence_score(signal_id: int, symbol: str, signal_type: str):
+    """Calculate AI confidence score for a signal (0-100)."""
+    from . import ai_signals
+    try:
+        confidence = ai_signals.calculate_signal_confidence(signal_id, symbol, signal_type)
+        ai_signals.save_signal_confidence(signal_id, symbol, signal_type, confidence)
+
+        return {
+            "signal_id": signal_id,
+            "symbol": symbol,
+            "signal_type": signal_type,
+            "confidence_score": confidence,
+            "timestamp": datetime.utcnow().isoformat()
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/predictions/{symbol}")
+async def get_entry_exit_predictions(symbol: str):
+    """Get ML-based entry and exit price predictions."""
+    from . import ai_signals
+    try:
+        # Get recent signals
+        conn = db_store._connect()
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT * FROM signals WHERE symbol = ? ORDER BY created_at DESC LIMIT 20",
+            (symbol.upper(),)
+        )
+        recent_signals = [dict(row) for row in cursor.fetchall()]
+        conn.close()
+
+        predictions = ai_signals.predict_entry_exit_points(symbol, recent_signals)
+
+        return {
+            "symbol": symbol,
+            "predictions": predictions,
+            "timestamp": datetime.utcnow().isoformat()
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/sentiment/analyze")
+async def analyze_sentiment(req: SentimentAnalyzeRequest):
+    """Analyze sentiment of content (news/social media)."""
+    from . import ai_signals
+    try:
+        result = ai_signals.analyze_sentiment(req.content, req.source)
+
+        # Save to database
+        conn = db_store._connect()
+        cursor = conn.cursor()
+        cursor.execute(
+            """INSERT INTO sentiment_analysis
+               (content_source, content_text, sentiment, sentiment_score, positive_count, negative_count, created_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?)""",
+            (req.source, req.content, result['sentiment'], result['score'],
+             result['positive_count'], result['negative_count'], datetime.utcnow().isoformat())
+        )
+        conn.commit()
+        conn.close()
+
+        return {
+            "source": req.source,
+            "sentiment": result['sentiment'],
+            "score": result['score'],
+            "positive_count": result['positive_count'],
+            "negative_count": result['negative_count'],
+            "timestamp": datetime.utcnow().isoformat()
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/patterns/{symbol}")
+async def detect_chart_patterns(symbol: str):
+    """Detect chart patterns (head & shoulders, triangles, flags, etc.)."""
+    from . import ai_signals
+    try:
+        patterns = ai_signals.detect_patterns(symbol)
+
+        return {
+            "symbol": symbol,
+            "patterns": patterns,
+            "pattern_count": len(patterns),
+            "timestamp": datetime.utcnow().isoformat()
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/anomalies/{symbol}")
+async def detect_market_anomalies(symbol: str):
+    """Detect market anomalies (unusual volume, extreme price moves)."""
+    from . import ai_signals
+    try:
+        anomalies = ai_signals.detect_anomalies(symbol)
+
+        return {
+            "symbol": symbol,
+            "anomalies": anomalies,
+            "anomaly_count": len(anomalies),
+            "timestamp": datetime.utcnow().isoformat()
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/user/{user_id}/risk-profile")
+async def get_user_risk_profile(user_id: str):
+    """Get user's risk profile based on trading behavior."""
+    from . import ai_signals
+    try:
+        profile = ai_signals.get_user_risk_profile(user_id)
+
+        return {
+            "user_id": user_id,
+            "risk_profile": profile.get('risk_profile'),
+            "experience_level": profile.get('experience_level'),
+            "avg_roi": profile.get('avg_roi'),
+            "timestamp": datetime.utcnow().isoformat()
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/recommendations/{user_id}")
+async def get_signal_recommendations(user_id: str, limit: int = 10):
+    """Get personalized signal recommendations based on user's risk profile."""
+    from . import ai_signals
+    try:
+        # Get available signals
+        conn = db_store._connect()
+        cursor = conn.cursor()
+        cursor.execute(
+            """SELECT id, symbol, signal_type, severity, message, created_at
+               FROM signals
+               ORDER BY created_at DESC LIMIT 50"""
+        )
+        signals = []
+        for row in cursor.fetchall():
+            signals.append({
+                "id": row[0],
+                "symbol": row[1],
+                "signal_type": row[2],
+                "severity": row[3],
+                "message": row[4],
+                "created_at": row[5],
+                "confidence_score": 50  # Default, would be calculated in production
+            })
+        conn.close()
+
+        # Get recommendations
+        recommendations = ai_signals.recommend_signals_for_user(user_id, signals)
+
+        return {
+            "user_id": user_id,
+            "recommendations": recommendations[:limit],
+            "count": len(recommendations),
+            "timestamp": datetime.utcnow().isoformat()
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
