@@ -998,3 +998,116 @@ async def get_signal_recommendations(user_id: str, limit: int = 10):
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============= Phase 12: News & Economic Indicators =============
+
+@app.get("/api/news-feed")
+async def get_news_feed(symbol: Optional[str] = None, limit: int = 20):
+    """Get latest news feed for stocks or market."""
+    from . import news_service
+    try:
+        news = news_service.get_news_feed(symbol, limit)
+
+        return {
+            "news": news,
+            "count": len(news),
+            "symbol": symbol or "market",
+            "timestamp": datetime.utcnow().isoformat()
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/economic-calendar")
+async def get_economic_calendar(days_ahead: int = 30):
+    """Get upcoming economic events calendar."""
+    from . import news_service
+    try:
+        events = news_service.get_economic_events(days_ahead)
+
+        return {
+            "events": events,
+            "count": len(events),
+            "days_ahead": days_ahead,
+            "timestamp": datetime.utcnow().isoformat()
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/earnings-calendar")
+async def get_earnings_calendar(days_ahead: int = 30):
+    """Get upcoming earnings calendar."""
+    from . import news_service
+    try:
+        earnings = news_service.get_earnings_calendar(days_ahead)
+
+        return {
+            "earnings": earnings,
+            "count": len(earnings),
+            "days_ahead": days_ahead,
+            "timestamp": datetime.utcnow().isoformat()
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/market-sentiment")
+async def get_market_sentiment():
+    """Get overall market sentiment indicators (VIX, Put/Call ratio, etc.)."""
+    from . import news_service
+    try:
+        sentiment = news_service.get_market_sentiment()
+
+        return {
+            "sentiment": sentiment,
+            "timestamp": datetime.utcnow().isoformat()
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/related-assets")
+async def get_related_assets():
+    """Get correlation and performance of related assets (oil, gold, USD, bonds)."""
+    from . import news_service
+    try:
+        assets = news_service.get_related_assets_correlation()
+
+        return {
+            "assets": assets,
+            "timestamp": datetime.utcnow().isoformat()
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/news-impact/{symbol}")
+async def get_news_impact(symbol: str, days: int = 7):
+    """Analyze news signal impact on price movement."""
+    from . import news_service
+    try:
+        impact = news_service.get_news_signal_impact(symbol, days)
+
+        return {
+            **impact,
+            "timestamp": datetime.utcnow().isoformat()
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/sector-sentiment/{sector}")
+async def get_sector_sentiment(sector: str):
+    """Track how sector news affects ETF performance."""
+    from . import news_service
+    try:
+        correlation = news_service.track_sector_news_correlation(sector)
+
+        return {
+            **correlation,
+            "timestamp": datetime.utcnow().isoformat()
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
