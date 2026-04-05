@@ -1,259 +1,366 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useState } from "react"
 import { useAuth } from "@/context/AuthContext"
-import { Button } from "@/components/ui/button"
 import { AnimateIn } from "@/components/layout/AnimateIn"
-import { Save, AlertTriangle } from "lucide-react"
+import { Save, Bell, Lock, User, Sliders, Database } from "lucide-react"
 
-interface Preferences {
-  theme: string
-  notification_email: boolean
-  subscription_plan: string
-}
+type SettingsTab = "profile" | "notifications" | "preferences" | "security" | "data"
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"
 
 export default function SettingsPage() {
   const { user, token } = useAuth()
-  const [preferences, setPreferences] = useState<Preferences | null>(null)
-  const [loading, setLoading] = useState(true)
+  const [activeTab, setActiveTab] = useState<SettingsTab>("profile")
   const [saving, setSaving] = useState(false)
-  const [error, setError] = useState("")
-  const [success, setSuccess] = useState("")
+  const [profile, setProfile] = useState({
+    name: user?.name || "사용자",
+    email: user?.email || "",
+    preferred_currency: "USD",
+    timezone: "Asia/Seoul",
+    language: "ko",
+  })
+  const [notifications, setNotifications] = useState({
+    email_enabled: true,
+    push_enabled: true,
+    sms_enabled: false,
+    telegram_enabled: false,
+    discord_enabled: false,
+    quiet_hours_enabled: false,
+    quiet_hours_start: "21:00",
+    quiet_hours_end: "09:00",
+  })
 
-  useEffect(() => {
-    if (!user?.user_id || !token) return
-
-    const fetchPreferences = async () => {
-      try {
-        const res = await fetch(`${API_BASE}/api/user/${user.user_id}`, {
-          headers: { Authorization: `Bearer ${token}` },
-        })
-
-        if (!res.ok) {
-          throw new Error("Failed to load preferences")
-        }
-
-        const data = await res.json()
-        setPreferences(data.preferences)
-      } catch (err: any) {
-        setError(err.message || "Error loading preferences")
-      } finally {
-        setLoading(false)
-      }
-    }
-
-    fetchPreferences()
-  }, [user, token])
-
-  const handleSave = async () => {
-    if (!user?.user_id || !token || !preferences) return
-
+  const handleSaveProfile = async () => {
     setSaving(true)
-    setError("")
-    setSuccess("")
-
     try {
-      const res = await fetch(`${API_BASE}/api/user/${user.user_id}/preferences`, {
-        method: "POST",
+      await fetch(`${API_BASE}/api/users/profile`, {
+        method: "PUT",
         headers: {
-          "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
         },
-        body: JSON.stringify(preferences),
+        body: JSON.stringify(profile),
       })
-
-      if (!res.ok) {
-        throw new Error("Failed to save preferences")
-      }
-
-      setSuccess("Preferences saved successfully!")
-      setTimeout(() => setSuccess(""), 3000)
-    } catch (err: any) {
-      setError(err.message || "Error saving preferences")
     } finally {
       setSaving(false)
     }
   }
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-background p-6">
-        <div className="max-w-2xl mx-auto">
-          <div className="animate-pulse space-y-4">
-            <div className="h-8 bg-muted rounded" />
-            <div className="h-40 bg-muted rounded" />
-          </div>
-        </div>
-      </div>
-    )
-  }
-
-  if (!preferences) {
-    return (
-      <div className="min-h-screen bg-background p-6">
-        <div className="max-w-2xl mx-auto text-center">
-          <p className="text-red-500">{error || "Failed to load settings"}</p>
-        </div>
-      </div>
-    )
-  }
+  const TabButton = ({ tab, label, icon }: { tab: SettingsTab; label: string; icon: React.ReactNode }) => (
+    <button
+      onClick={() => setActiveTab(tab)}
+      className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all text-sm ${
+        activeTab === tab ? "bg-blue-600 text-white" : "bg-muted text-foreground hover:bg-muted/80"
+      }`}
+    >
+      {icon}
+      {label}
+    </button>
+  )
 
   return (
     <div className="min-h-screen bg-background p-6">
-      <div className="max-w-2xl mx-auto">
+      <div className="max-w-6xl mx-auto">
         <AnimateIn from="bottom">
           <div className="mb-8">
-            <h1 className="text-3xl font-bold mb-2">Settings</h1>
-            <p className="text-muted-foreground">Manage your preferences and account options</p>
+            <h1 className="text-3xl font-bold mb-2">설정</h1>
+            <p className="text-muted-foreground">계정, 알림, 보안 및 환경 설정 관리</p>
           </div>
         </AnimateIn>
 
-        {/* Messages */}
-        {error && (
-          <AnimateIn from="bottom">
-            <div className="mb-6 p-4 bg-destructive/10 border border-destructive/30 rounded-lg text-destructive text-sm">
-              {error}
-            </div>
-          </AnimateIn>
-        )}
-
-        {success && (
-          <AnimateIn from="bottom">
-            <div className="mb-6 p-4 bg-green-500/10 border border-green-500/30 rounded-lg text-green-600 text-sm">
-              {success}
-            </div>
-          </AnimateIn>
-        )}
-
-        {/* Theme Settings */}
+        {/* Tab Navigation */}
         <AnimateIn from="bottom" delay={80}>
-          <div className="bg-card border border-border rounded-lg p-6 mb-6">
-            <h3 className="text-lg font-semibold mb-4">Appearance</h3>
+          <div className="mb-6 bg-card border border-border rounded-lg p-4 flex gap-2 flex-wrap">
+            <TabButton tab="profile" label="프로필" icon={<User size={18} />} />
+            <TabButton tab="notifications" label="알림" icon={<Bell size={18} />} />
+            <TabButton tab="preferences" label="환경설정" icon={<Sliders size={18} />} />
+            <TabButton tab="security" label="보안" icon={<Lock size={18} />} />
+            <TabButton tab="data" label="데이터" icon={<Database size={18} />} />
+          </div>
+        </AnimateIn>
 
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium mb-3">Theme</label>
-                <div className="grid grid-cols-3 gap-3">
-                  {["system", "light", "dark"].map((theme) => (
+        {/* Content */}
+        <AnimateIn from="bottom" delay={160}>
+          <div>
+            {/* Profile Tab */}
+            {activeTab === "profile" && (
+              <div className="space-y-6">
+                <div className="bg-card border border-border rounded-lg p-6">
+                  <h2 className="text-xl font-bold mb-6">프로필 정보</h2>
+                  <div className="space-y-4">
+                    <div className="flex items-center gap-4 pb-6 border-b border-border">
+                      <div className="w-16 h-16 bg-blue-600 rounded-full flex items-center justify-center text-white font-bold text-xl">
+                        {profile.name.charAt(0).toUpperCase()}
+                      </div>
+                      <div>
+                        <p className="text-sm text-muted-foreground">프로필 사진</p>
+                        <p className="font-semibold">{profile.name}</p>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <div>
+                        <label className="block text-sm font-semibold mb-2">이름</label>
+                        <input
+                          type="text"
+                          value={profile.name}
+                          onChange={(e) => setProfile({ ...profile, name: e.target.value })}
+                          className="w-full px-4 py-2 bg-muted border border-border rounded-lg text-foreground"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-semibold mb-2">이메일</label>
+                        <input
+                          type="email"
+                          value={profile.email}
+                          onChange={(e) => setProfile({ ...profile, email: e.target.value })}
+                          className="w-full px-4 py-2 bg-muted border border-border rounded-lg text-foreground"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-semibold mb-2">통화</label>
+                        <select
+                          value={profile.preferred_currency}
+                          onChange={(e) => setProfile({ ...profile, preferred_currency: e.target.value })}
+                          className="w-full px-4 py-2 bg-muted border border-border rounded-lg text-foreground"
+                        >
+                          <option value="USD">미국 달러 (USD)</option>
+                          <option value="KRW">한국 원 (KRW)</option>
+                          <option value="EUR">유로 (EUR)</option>
+                          <option value="JPY">일본 엔 (JPY)</option>
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-semibold mb-2">시간대</label>
+                        <select
+                          value={profile.timezone}
+                          onChange={(e) => setProfile({ ...profile, timezone: e.target.value })}
+                          className="w-full px-4 py-2 bg-muted border border-border rounded-lg text-foreground"
+                        >
+                          <option value="America/New_York">미국 동부 (EST)</option>
+                          <option value="America/Chicago">미국 중부 (CST)</option>
+                          <option value="America/Los_Angeles">미국 서부 (PST)</option>
+                          <option value="Europe/London">런던 (GMT)</option>
+                          <option value="Asia/Seoul">서울 (KST)</option>
+                          <option value="Asia/Tokyo">도쿄 (JST)</option>
+                        </select>
+                      </div>
+                    </div>
+
                     <button
-                      key={theme}
-                      onClick={() =>
-                        setPreferences({ ...preferences, theme })
-                      }
-                      className={`p-3 rounded-lg border-2 transition ${
-                        preferences.theme === theme
-                          ? "border-primary bg-primary/10"
-                          : "border-border bg-muted/50 hover:border-border"
-                      }`}
+                      onClick={handleSaveProfile}
+                      disabled={saving}
+                      className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-muted text-white font-bold py-3 rounded-lg transition-all flex items-center justify-center gap-2 mt-6"
                     >
-                      <p className="text-sm font-medium capitalize">{theme}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {theme === "system"
-                          ? "Auto"
-                          : theme === "light"
-                            ? "☀️"
-                            : "🌙"}
-                      </p>
+                      <Save size={18} />
+                      {saving ? "저장 중..." : "프로필 저장"}
                     </button>
-                  ))}
+                  </div>
                 </div>
               </div>
-            </div>
-          </div>
-        </AnimateIn>
+            )}
 
-        {/* Notification Settings */}
-        <AnimateIn from="bottom" delay={160}>
-          <div className="bg-card border border-border rounded-lg p-6 mb-6">
-            <h3 className="text-lg font-semibold mb-4">Notifications</h3>
+            {/* Notifications Tab */}
+            {activeTab === "notifications" && (
+              <div className="space-y-6">
+                <div className="bg-card border border-border rounded-lg p-6">
+                  <h2 className="text-xl font-bold mb-6">알림 채널</h2>
+                  <div className="space-y-4">
+                    {[
+                      { key: "email_enabled", label: "이메일", icon: "📧" },
+                      { key: "push_enabled", label: "푸시 알림", icon: "🔔" },
+                      { key: "sms_enabled", label: "SMS", icon: "💬" },
+                      { key: "telegram_enabled", label: "텔레그램", icon: "✈️" },
+                      { key: "discord_enabled", label: "디스코드", icon: "💜" },
+                    ].map((channel) => (
+                      <div key={channel.key} className="flex items-center justify-between p-4 border border-border rounded-lg">
+                        <div className="flex items-center gap-3">
+                          <span className="text-2xl">{channel.icon}</span>
+                          <span className="font-semibold">{channel.label}</span>
+                        </div>
+                        <input
+                          type="checkbox"
+                          checked={(notifications as any)[channel.key]}
+                          onChange={(e) =>
+                            setNotifications({ ...notifications, [channel.key]: e.target.checked })
+                          }
+                          className="w-5 h-5 cursor-pointer"
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
 
-            <div className="space-y-4">
-              <label className="flex items-center gap-3 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={preferences.notification_email}
-                  onChange={(e) =>
-                    setPreferences({
-                      ...preferences,
-                      notification_email: e.target.checked,
-                    })
-                  }
-                  className="w-4 h-4 rounded border-border"
-                />
-                <span className="text-sm">
-                  <p className="font-medium">Email Notifications</p>
-                  <p className="text-xs text-muted-foreground">
-                    Get alerts about new signals and calculations
-                  </p>
-                </span>
-              </label>
-            </div>
-          </div>
-        </AnimateIn>
+                <div className="bg-card border border-border rounded-lg p-6">
+                  <h2 className="text-xl font-bold mb-6">조용한 시간대</h2>
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between mb-4">
+                      <label className="font-semibold">활성화</label>
+                      <input
+                        type="checkbox"
+                        checked={notifications.quiet_hours_enabled}
+                        onChange={(e) =>
+                          setNotifications({ ...notifications, quiet_hours_enabled: e.target.checked })
+                        }
+                        className="w-5 h-5 cursor-pointer"
+                      />
+                    </div>
 
-        {/* Plan Info */}
-        <AnimateIn from="bottom" delay={240}>
-          <div className="bg-card border border-border rounded-lg p-6 mb-6">
-            <h3 className="text-lg font-semibold mb-4">Current Plan</h3>
-            <div className="text-center p-6 bg-muted/50 rounded-lg border border-border">
-              <p className="text-sm text-muted-foreground mb-2">Subscription Plan</p>
-              <p className="text-2xl font-bold capitalize mb-2">
-                {preferences.subscription_plan}
-              </p>
-              <p className="text-xs text-muted-foreground">
-                {preferences.subscription_plan === "guest"
-                  ? "You have full access while in test mode"
-                  : "Enjoy unlimited access to all features"}
-              </p>
-            </div>
-          </div>
-        </AnimateIn>
+                    {notifications.quiet_hours_enabled && (
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-sm font-semibold mb-2">시작 시간</label>
+                          <input
+                            type="time"
+                            value={notifications.quiet_hours_start}
+                            onChange={(e) =>
+                              setNotifications({ ...notifications, quiet_hours_start: e.target.value })
+                            }
+                            className="w-full px-4 py-2 bg-muted border border-border rounded-lg text-foreground"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-semibold mb-2">종료 시간</label>
+                          <input
+                            type="time"
+                            value={notifications.quiet_hours_end}
+                            onChange={(e) =>
+                              setNotifications({ ...notifications, quiet_hours_end: e.target.value })
+                            }
+                            className="w-full px-4 py-2 bg-muted border border-border rounded-lg text-foreground"
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
 
-        {/* Danger Zone */}
-        <AnimateIn from="bottom" delay={320}>
-          <div className="bg-destructive/5 border border-destructive/20 rounded-lg p-6">
-            <div className="flex items-start gap-3 mb-4">
-              <AlertTriangle className="w-5 h-5 text-destructive flex-shrink-0 mt-0.5" />
-              <div>
-                <h3 className="text-lg font-semibold text-destructive">Danger Zone</h3>
-                <p className="text-sm text-muted-foreground mt-1">
-                  Irreversible actions
-                </p>
+                <button
+                  onClick={handleSaveProfile}
+                  disabled={saving}
+                  className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-muted text-white font-bold py-3 rounded-lg transition-all flex items-center justify-center gap-2"
+                >
+                  <Save size={18} />
+                  {saving ? "저장 중..." : "알림 설정 저장"}
+                </button>
               </div>
-            </div>
+            )}
 
-            <Button
-              variant="destructive"
-              className="w-full"
-              onClick={() => {
-                if (
-                  confirm(
-                    "Are you sure? This will delete your account and all data. This action cannot be undone."
-                  )
-                ) {
-                  console.log("Account deletion requested")
-                  // TODO: Implement account deletion API
-                }
-              }}
-            >
-              Delete Account
-            </Button>
-          </div>
-        </AnimateIn>
+            {/* Preferences Tab */}
+            {activeTab === "preferences" && (
+              <div className="bg-card border border-border rounded-lg p-6">
+                <h2 className="text-xl font-bold mb-6">환경 설정</h2>
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-semibold mb-2">테마</label>
+                    <select
+                      defaultValue="dark"
+                      className="w-full px-4 py-2 bg-muted border border-border rounded-lg text-foreground"
+                    >
+                      <option value="dark">다크 모드</option>
+                      <option value="light">라이트 모드</option>
+                    </select>
+                  </div>
 
-        {/* Save Button */}
-        <AnimateIn from="bottom" delay={400}>
-          <div className="mt-8 flex gap-4">
-            <Button
-              onClick={handleSave}
-              disabled={saving}
-              className="flex-1"
-            >
-              <Save className="w-4 h-4 mr-2" />
-              {saving ? "Saving..." : "Save Changes"}
-            </Button>
+                  <div>
+                    <label className="block text-sm font-semibold mb-2">언어</label>
+                    <select
+                      value={profile.language}
+                      onChange={(e) => setProfile({ ...profile, language: e.target.value })}
+                      className="w-full px-4 py-2 bg-muted border border-border rounded-lg text-foreground"
+                    >
+                      <option value="ko">한국어</option>
+                      <option value="en">English</option>
+                      <option value="ja">日本語</option>
+                    </select>
+                  </div>
+
+                  <div className="border-t border-border pt-6">
+                    <h3 className="font-semibold mb-4">대시보드 설정</h3>
+                    <div className="space-y-3">
+                      {[
+                        { label: "리얼타임 업데이트", checked: true },
+                        { label: "음성 알림", checked: false },
+                        { label: "자동 새로고침", checked: true },
+                      ].map((setting) => (
+                        <div key={setting.label} className="flex items-center justify-between p-3 rounded-lg bg-muted/50">
+                          <span>{setting.label}</span>
+                          <input type="checkbox" defaultChecked={setting.checked} className="w-5 h-5 cursor-pointer" />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <button
+                    onClick={handleSaveProfile}
+                    disabled={saving}
+                    className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-muted text-white font-bold py-3 rounded-lg transition-all flex items-center justify-center gap-2 mt-6"
+                  >
+                    <Save size={18} />
+                    {saving ? "저장 중..." : "환경 설정 저장"}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Security Tab */}
+            {activeTab === "security" && (
+              <div className="space-y-6">
+                <div className="bg-card border border-border rounded-lg p-6">
+                  <h2 className="text-xl font-bold mb-6">비밀번호 변경</h2>
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-sm font-semibold mb-2">현재 비밀번호</label>
+                      <input type="password" placeholder="현재 비밀번호" className="w-full px-4 py-2 bg-muted border border-border rounded-lg text-foreground" />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-semibold mb-2">새 비밀번호</label>
+                      <input type="password" placeholder="새 비밀번호" className="w-full px-4 py-2 bg-muted border border-border rounded-lg text-foreground" />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-semibold mb-2">비밀번호 확인</label>
+                      <input type="password" placeholder="비밀번호 확인" className="w-full px-4 py-2 bg-muted border border-border rounded-lg text-foreground" />
+                    </div>
+                    <button className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg transition-all">
+                      비밀번호 변경
+                    </button>
+                  </div>
+                </div>
+
+                <div className="bg-card border border-border rounded-lg p-6">
+                  <h2 className="text-xl font-bold mb-4">2단계 인증</h2>
+                  <p className="text-muted-foreground mb-4">계정 보안을 강화하세요</p>
+                  <button className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold transition-all">
+                    활성화
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Data Tab */}
+            {activeTab === "data" && (
+              <div className="space-y-6">
+                <div className="bg-card border border-border rounded-lg p-6">
+                  <h2 className="text-xl font-bold mb-6">데이터 내보내기</h2>
+                  <p className="text-muted-foreground mb-4">당신의 모든 데이터를 다운로드하세요</p>
+                  <button className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg transition-all">
+                    데이터 다운로드 (JSON)
+                  </button>
+                </div>
+
+                <div className="bg-red-600/10 border border-red-600 rounded-lg p-6">
+                  <h2 className="text-xl font-bold mb-4 text-red-600">계정 삭제</h2>
+                  <p className="text-muted-foreground mb-4">주의: 이 작업은 되돌릴 수 없습니다</p>
+                  <button className="px-6 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg font-semibold transition-all">
+                    계정 삭제
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </AnimateIn>
       </div>

@@ -11,6 +11,7 @@ from typing import Dict, Set
 from . import (
     routes_broker,
     routes_export,
+    routes_settings,
 )
 from . import alerts_advanced
 from . import stock_screener
@@ -58,6 +59,7 @@ app.add_middleware(
 # Include routers
 app.include_router(routes_broker.router)
 app.include_router(routes_export.router)
+app.include_router(routes_settings.router)
 
 
 # ============= Alert Routes =============
