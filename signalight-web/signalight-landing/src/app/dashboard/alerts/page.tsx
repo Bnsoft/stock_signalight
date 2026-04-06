@@ -1,585 +1,459 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useState, useEffect } from "react"
 import { useAuth } from "@/context/AuthContext"
-import { Button } from "@/components/ui/button"
 import { AnimateIn } from "@/components/layout/AnimateIn"
-import { Bell, Plus, Trash2, Toggle2, Filter, Clock, DollarSign, TrendingUp, AlertCircle, Volume2, Eye, BookOpen } from "lucide-react"
+import {
+  Plus,
+  Trash2,
+  Toggle2,
+  Clock,
+  TrendingUp,
+  TrendingDown,
+  Volume2,
+  BarChart3,
+  AlertCircle,
+  Newspaper,
+  Bell,
+} from "lucide-react"
+import { useToast } from "@/hooks/useToast"
+import { useCache } from "@/hooks/useCache"
+import { usePagination } from "@/hooks/usePagination"
+import { ToastContainer } from "@/components/ToastContainer"
+import { Pagination } from "@/components/Pagination"
 
 interface Alert {
-  id: number
-  symbol: string
+  id: string
   type: string
-  trigger_value?: number
-  trigger_price?: number
-  indicator?: string
-  condition?: string
-  threshold?: number
-  alert_type?: string
-  message?: string
-  active: boolean
-  created_at?: string
-}
-
-interface AlertHistory {
-  id: number
-  alert_type: string
   symbol: string
-  trigger_price?: number
-  notify_method: string
-  triggered_at: string
+  name: string
+  condition: string
+  threshold: number
+  enabled: boolean
+  createdDate: string
+  lastTriggered?: string
+  notificationChannels: string[]
 }
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"
 
-const ALERT_TYPES = [
-  { value: "PRICE", label: "가격 알람", icon: "💰", desc: "가격이 특정 수준 도달" },
-  { value: "INDICATOR", label: "지표 알람", icon: "📊", desc: "RSI, MACD, MA 등" },
-  { value: "VOLUME", label: "거래량 알람", icon: "📈", desc: "비정상 거래량" },
-  { value: "PORTFOLIO", label: "포트폴리오 알람", icon: "🎯", desc: "포트폴리오 손익" },
-  { value: "NEWS", label: "뉴스 알람", icon: "📰", desc: "기업 뉴스/이벤트" },
-  { value: "TIME", label: "시간 알람", icon: "⏰", desc: "특정 시간 알림" },
-  { value: "COMPOSITE", label: "복합 조건", icon: "⚙️", desc: "AND/OR 조건" }
-]
+const alertTypeIcons: Record<string, React.ReactNode> = {
+  price: <TrendingUp size={18} />,
+  indicator: <BarChart3 size={18} />,
+  volume: <Volume2 size={18} />,
+  portfolio: <TrendingDown size={18} />,
+  news: <Newspaper size={18} />,
+  time: <Clock size={18} />,
+  composite: <AlertCircle size={18} />,
+}
 
-const NOTIFY_CHANNELS = [
-  { value: "EMAIL", label: "이메일", checked: true },
-  { value: "PUSH", label: "푸시 알림", checked: true },
-  { value: "SMS", label: "SMS", checked: false },
-  { value: "TELEGRAM", label: "텔레그램", checked: false },
-  { value: "DISCORD", label: "디스코드", checked: false }
-]
+const alertTypeLabels: Record<string, string> = {
+  price: "가격 알람",
+  indicator: "지표 알람",
+  volume: "거래량 알람",
+  portfolio: "포트폴리오 알람",
+  news: "뉴스 알람",
+  time: "시간 기반 알람",
+  composite: "복합 조건 알람",
+}
 
 export default function AlertsPage() {
   const { user, token } = useAuth()
-  const [loading, setLoading] = useState(true)
-  const [activeTab, setActiveTab] = useState<"manage" | "history" | "settings">("manage")
-  const [alerts, setAlerts] = useState<Alert[]>([])
-  const [alertHistory, setAlertHistory] = useState<AlertHistory[]>([])
-  const [showNewAlert, setShowNewAlert] = useState(false)
-  const [selectedAlertType, setSelectedAlertType] = useState<string | null>(null)
-  const [filterSymbol, setFilterSymbol] = useState("")
+  const { toasts, removeToast, success, error: showError } = useToast()
+  const cache = useCache({ defaultTTL: 2 * 60 * 1000 })
+  const pagination = usePagination(10)
 
-  const [newAlert, setNewAlert] = useState({
+  const [alerts, setAlerts] = useState<Alert[]>([])
+  const [loading, setLoading] = useState(false)
+  const [showAddForm, setShowAddForm] = useState(false)
+  const [selectedType, setSelectedType] = useState("price")
+  const [formData, setFormData] = useState({
     symbol: "",
-    alert_type: "PRICE",
-    trigger_price: 0,
-    condition: "ABOVE",
-    threshold: 0,
-    message: "",
-    notify_methods: ["PUSH", "EMAIL"]
+    name: "",
+    condition: "greater",
+    threshold: "",
+    notificationChannels: [] as string[],
   })
 
   useEffect(() => {
-    if (!user?.user_id || !token) return
+    loadAlerts()
+  }, [])
 
-    const fetchAlerts = async () => {
-      try {
-        const res = await fetch(`${API_BASE}/api/alerts?user_id=${user.user_id}`, {
-          headers: { Authorization: `Bearer ${token}` }
-        })
-        if (res.ok) {
-          const data = await res.json()
-          const allAlerts = [
-            ...(data.price_alerts || []),
-            ...(data.indicator_alerts || []),
-            ...(data.volume_alerts || []),
-            ...(data.portfolio_alerts || []),
-            ...(data.news_alerts || []),
-            ...(data.time_alerts || [])
-          ]
-          setAlerts(allAlerts)
-        }
+  useEffect(() => {
+    pagination.setTotal(alerts.length)
+  }, [alerts])
 
-        const historyRes = await fetch(`${API_BASE}/api/alerts/history?user_id=${user.user_id}`, {
-          headers: { Authorization: `Bearer ${token}` }
-        })
-        if (historyRes.ok) {
-          const data = await historyRes.json()
-          setAlertHistory(data.history || [])
-        }
-      } catch (err) {
-        console.error("Failed to load alerts", err)
-      } finally {
-        setLoading(false)
+  const loadAlerts = async () => {
+    try {
+      setLoading(true)
+      const cached = cache.get<Alert[]>(`/api/alerts`)
+      if (cached) {
+        setAlerts(cached)
+        return
       }
+
+      const response = await fetch(`${API_BASE}/api/alerts`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      })
+
+      if (!response.ok) throw new Error("Failed to load alerts")
+
+      const data = await response.json()
+      const alertsList: Alert[] = data.data || []
+
+      cache.set(`/api/alerts`, alertsList)
+      setAlerts(alertsList)
+    } catch (err) {
+      showError("알람을 로드할 수 없습니다")
+      console.error(err)
+    } finally {
+      setLoading(false)
     }
+  }
 
-    fetchAlerts()
-  }, [user?.user_id, token])
-
-  const handleCreateAlert = async () => {
-    if (!newAlert.symbol || newAlert.trigger_price === 0) {
-      alert("필수 항목을 입력하세요")
+  const handleAddAlert = async () => {
+    if (!formData.symbol.trim() || !formData.threshold) {
+      showError("필수 정보를 입력하세요")
       return
     }
 
     try {
-      let endpoint = `${API_BASE}/api/alerts/`
-
-      if (newAlert.alert_type === "PRICE") {
-        endpoint += "price"
-      } else if (newAlert.alert_type === "INDICATOR") {
-        endpoint += "indicator"
-      } else if (newAlert.alert_type === "VOLUME") {
-        endpoint += "volume"
-      } else if (newAlert.alert_type === "PORTFOLIO") {
-        endpoint += "portfolio"
-      } else if (newAlert.alert_type === "NEWS") {
-        endpoint += "news"
-      } else if (newAlert.alert_type === "TIME") {
-        endpoint += "time"
-      } else if (newAlert.alert_type === "COMPOSITE") {
-        endpoint += "composite"
+      const payload = {
+        symbol: formData.symbol.toUpperCase(),
+        name: formData.name || formData.symbol,
+        condition: formData.condition,
+        threshold: parseFloat(formData.threshold),
+        notification_channels: formData.notificationChannels,
       }
 
-      const res = await fetch(endpoint + `?user_id=${user?.user_id}`, {
+      const endpoint = {
+        price: "/api/alerts/price",
+        indicator: "/api/alerts/indicator",
+        volume: "/api/alerts/volume",
+        portfolio: "/api/alerts/portfolio",
+        news: "/api/alerts/news",
+        time: "/api/alerts/time",
+        composite: "/api/alerts/composite",
+      }[selectedType]
+
+      const response = await fetch(`${API_BASE}${endpoint}`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`
+          Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify(newAlert)
+        body: JSON.stringify(payload),
       })
 
-      if (res.ok) {
-        alert("알람이 생성되었습니다")
-        setNewAlert({
-          symbol: "",
-          alert_type: "PRICE",
-          trigger_price: 0,
-          condition: "ABOVE",
-          threshold: 0,
-          message: "",
-          notify_methods: ["PUSH", "EMAIL"]
-        })
-        setShowNewAlert(false)
-        // Refetch alerts
-        const refreshRes = await fetch(`${API_BASE}/api/alerts?user_id=${user?.user_id}`, {
-          headers: { Authorization: `Bearer ${token}` }
-        })
-        if (refreshRes.ok) {
-          const data = await refreshRes.json()
-          const allAlerts = [
-            ...(data.price_alerts || []),
-            ...(data.indicator_alerts || []),
-            ...(data.volume_alerts || []),
-            ...(data.portfolio_alerts || []),
-            ...(data.news_alerts || []),
-            ...(data.time_alerts || [])
-          ]
-          setAlerts(allAlerts)
-        }
-      }
+      if (!response.ok) throw new Error("Failed to create alert")
+
+      cache.remove(`/api/alerts`)
+      success("알람이 추가되었습니다")
+      setFormData({
+        symbol: "",
+        name: "",
+        condition: "greater",
+        threshold: "",
+        notificationChannels: [],
+      })
+      setShowAddForm(false)
+
+      await loadAlerts()
     } catch (err) {
-      console.error("Failed to create alert", err)
-      alert("알람 생성 실패")
+      showError("알람 추가에 실패했습니다")
+      console.error(err)
     }
   }
 
-  const handleDeleteAlert = async (alertId: number, alertType: string) => {
+  const handleToggleAlert = async (alertId: string) => {
+    try {
+      const response = await fetch(`${API_BASE}/api/alerts/${alertId}/toggle`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+      })
+
+      if (!response.ok) throw new Error("Failed to toggle alert")
+
+      cache.remove(`/api/alerts`)
+      success("알람이 업데이트되었습니다")
+      await loadAlerts()
+    } catch (err) {
+      showError("알람 업데이트에 실패했습니다")
+      console.error(err)
+    }
+  }
+
+  const handleDeleteAlert = async (alertId: string) => {
     if (!confirm("이 알람을 삭제하시겠습니까?")) return
 
     try {
-      const res = await fetch(`${API_BASE}/api/alerts/${alertId}?alert_type=${alertType}`, {
+      const response = await fetch(`${API_BASE}/api/alerts/${alertId}`, {
         method: "DELETE",
-        headers: { Authorization: `Bearer ${token}` }
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
       })
 
-      if (res.ok) {
-        setAlerts(alerts.filter(a => a.id !== alertId))
-      }
+      if (!response.ok) throw new Error("Failed to delete alert")
+
+      cache.remove(`/api/alerts`)
+      success("알람이 삭제되었습니다")
+      await loadAlerts()
     } catch (err) {
-      console.error("Failed to delete alert", err)
+      showError("알람 삭제에 실패했습니다")
+      console.error(err)
     }
   }
 
-  const handleToggleAlert = async (alertId: number, alertType: string, currentState: boolean) => {
-    try {
-      await fetch(`${API_BASE}/api/alerts/${alertId}/toggle?alert_type=${alertType}&is_active=${!currentState}`, {
-        method: "PUT",
-        headers: { Authorization: `Bearer ${token}` }
-      })
-
-      setAlerts(alerts.map(a =>
-        a.id === alertId ? { ...a, active: !a.active } : a
-      ))
-    } catch (err) {
-      console.error("Failed to toggle alert", err)
-    }
-  }
-
-  const getAlertIcon = (type: string) => {
-    switch (type) {
-      case "PRICE":
-        return <DollarSign className="w-4 h-4" />
-      case "INDICATOR":
-        return <TrendingUp className="w-4 h-4" />
-      case "VOLUME":
-        return <Volume2 className="w-4 h-4" />
-      case "PORTFOLIO":
-        return <Eye className="w-4 h-4" />
-      case "NEWS":
-        return <BookOpen className="w-4 h-4" />
-      case "TIME":
-        return <Clock className="w-4 h-4" />
-      default:
-        return <AlertCircle className="w-4 h-4" />
-    }
-  }
-
-  const filteredAlerts = filterSymbol
-    ? alerts.filter(a => a.symbol?.includes(filterSymbol.toUpperCase()))
-    : alerts
-
-  if (loading) {
-    return <div className="min-h-screen bg-background p-6 animate-pulse" />
-  }
+  const displayAlerts = alerts.slice(pagination.startIndex, pagination.endIndex)
 
   return (
     <div className="min-h-screen bg-background p-6">
       <div className="max-w-7xl mx-auto">
         <AnimateIn from="bottom">
-          <div className="flex items-center justify-between mb-8">
+          <div className="mb-8 flex items-center justify-between">
             <div>
-              <h1 className="text-3xl font-bold mb-2 flex items-center gap-2">
-                <Bell className="w-8 h-8 text-yellow-500" />
-                알람 설정
-              </h1>
-              <p className="text-muted-foreground">
-                가격, 지표, 거래량, 뉴스 등 다양한 알람 설정
-              </p>
+              <h1 className="text-3xl font-bold mb-2">알람 관리</h1>
+              <p className="text-muted-foreground">가격, 지표, 거래량 등 다양한 알람을 설정하세요</p>
             </div>
-            <Button onClick={() => setShowNewAlert(true)}>
-              <Plus className="w-4 h-4 mr-2" />
-              알람 추가
-            </Button>
-          </div>
-        </AnimateIn>
-
-        {/* Tab Navigation */}
-        <AnimateIn from="bottom" delay={40}>
-          <div className="flex gap-2 mb-6 border-b border-border">
             <button
-              onClick={() => setActiveTab("manage")}
-              className={`px-4 py-2 font-medium border-b-2 transition-all ${
-                activeTab === "manage"
-                  ? "border-primary text-primary"
-                  : "border-transparent text-muted-foreground hover:text-foreground"
-              }`}
+              onClick={() => setShowAddForm(!showAddForm)}
+              className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-bold transition-all"
             >
-              <Bell className="w-4 h-4 inline mr-2" />
-              알람 관리 ({alerts.length})
-            </button>
-            <button
-              onClick={() => setActiveTab("history")}
-              className={`px-4 py-2 font-medium border-b-2 transition-all ${
-                activeTab === "history"
-                  ? "border-primary text-primary"
-                  : "border-transparent text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              <Clock className="w-4 h-4 inline mr-2" />
-              발생 이력
-            </button>
-            <button
-              onClick={() => setActiveTab("settings")}
-              className={`px-4 py-2 font-medium border-b-2 transition-all ${
-                activeTab === "settings"
-                  ? "border-primary text-primary"
-                  : "border-transparent text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              ⚙️ 설정
+              <Plus size={18} />
+              새 알람
             </button>
           </div>
         </AnimateIn>
 
-        {/* Alert Management Tab */}
-        {activeTab === "manage" && (
+        {showAddForm && (
           <AnimateIn from="bottom" delay={80}>
-            <div>
-              {/* Filter */}
-              <div className="mb-4 flex gap-2">
-                <input
-                  type="text"
-                  placeholder="심볼로 필터 (예: QQQ)"
-                  value={filterSymbol}
-                  onChange={(e) => setFilterSymbol(e.target.value)}
-                  className="px-3 py-2 bg-muted border border-border rounded-lg text-sm w-48"
-                />
-                <Button variant="outline" size="sm">
-                  <Filter className="w-4 h-4 mr-2" />
-                  필터
-                </Button>
+            <div className="bg-card border border-border rounded-lg p-6 mb-6">
+              <h2 className="text-lg font-bold mb-4">새 알람 추가</h2>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                <div>
+                  <label className="block text-sm font-semibold mb-2">알람 타입</label>
+                  <select
+                    value={selectedType}
+                    onChange={(e) => setSelectedType(e.target.value)}
+                    className="w-full px-4 py-2 bg-muted border border-border rounded-lg text-foreground"
+                  >
+                    {Object.entries(alertTypeLabels).map(([key, label]) => (
+                      <option key={key} value={key}>
+                        {label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-semibold mb-2">종목 심볼</label>
+                  <input
+                    type="text"
+                    placeholder="예: AAPL, MSFT"
+                    value={formData.symbol}
+                    onChange={(e) =>
+                      setFormData({ ...formData, symbol: e.target.value.toUpperCase() })
+                    }
+                    className="w-full px-4 py-2 bg-muted border border-border rounded-lg text-foreground"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-semibold mb-2">조건</label>
+                  <select
+                    value={formData.condition}
+                    onChange={(e) =>
+                      setFormData({ ...formData, condition: e.target.value })
+                    }
+                    className="w-full px-4 py-2 bg-muted border border-border rounded-lg text-foreground"
+                  >
+                    <option value="greater">초과</option>
+                    <option value="less">미만</option>
+                    <option value="equal">같음</option>
+                    <option value="crossing">교차</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-semibold mb-2">임계값</label>
+                  <input
+                    type="number"
+                    placeholder="예: 150.5"
+                    value={formData.threshold}
+                    onChange={(e) =>
+                      setFormData({ ...formData, threshold: e.target.value })
+                    }
+                    step="0.01"
+                    className="w-full px-4 py-2 bg-muted border border-border rounded-lg text-foreground"
+                  />
+                </div>
               </div>
 
-              {/* Active Alerts */}
-              <div className="space-y-3">
-                {filteredAlerts.length > 0 ? (
-                  filteredAlerts.map(alert => (
-                    <div
-                      key={alert.id}
-                      className="bg-card border border-border rounded-lg p-4 flex items-start justify-between hover:border-primary transition-all"
-                    >
-                      <div className="flex items-start gap-3 flex-1">
-                        <div className="p-2 bg-muted rounded-lg">
-                          {getAlertIcon(alert.type || alert.alert_type)}
-                        </div>
-                        <div className="flex-1">
-                          <h3 className="font-bold text-lg">{alert.symbol}</h3>
-                          <p className="text-sm text-muted-foreground mb-2">
-                            {alert.type === "PRICE" && `가격이 $${alert.trigger_price}${alert.type === "PRICE_ABOVE" ? " 이상" : " 이하"}`}
-                            {alert.type === "INDICATOR" && `${alert.indicator} ${alert.condition} ${alert.threshold}`}
-                            {alert.type === "VOLUME" && `거래량 알람`}
-                            {alert.type === "PORTFOLIO" && `포트폴리오 ${alert.alert_type}`}
-                            {alert.type === "NEWS" && `뉴스 알람`}
-                            {alert.type === "TIME" && alert.message}
-                          </p>
-                          <p className="text-xs text-muted-foreground">
-                            생성: {alert.created_at ? new Date(alert.created_at).toLocaleDateString("ko-KR") : "-"}
-                          </p>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center gap-2">
-                        <button
-                          onClick={() => handleToggleAlert(alert.id, alert.type || alert.alert_type, alert.active)}
-                          className={`px-3 py-2 rounded-lg text-sm font-medium transition-all ${
-                            alert.active
-                              ? "bg-green-500/20 text-green-600"
-                              : "bg-gray-500/20 text-gray-600"
-                          }`}
-                        >
-                          {alert.active ? "활성" : "비활성"}
-                        </button>
-                        <button
-                          onClick={() => handleDeleteAlert(alert.id, alert.type || alert.alert_type)}
-                          className="p-2 hover:bg-red-500/10 rounded text-red-600"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </div>
-                  ))
-                ) : (
-                  <div className="text-center py-12">
-                    <Bell className="w-12 h-12 text-muted-foreground mx-auto mb-4 opacity-50" />
-                    <p className="text-muted-foreground">알람이 없습니다</p>
-                    <Button onClick={() => setShowNewAlert(true)} className="mt-4">
-                      알람 추가하기
-                    </Button>
-                  </div>
-                )}
-              </div>
-            </div>
-          </AnimateIn>
-        )}
-
-        {/* History Tab */}
-        {activeTab === "history" && (
-          <AnimateIn from="bottom" delay={80}>
-            <div className="space-y-2">
-              {alertHistory.length > 0 ? (
-                <div className="bg-card border border-border rounded-lg overflow-hidden">
-                  <div className="grid grid-cols-5 gap-4 p-4 bg-muted/50 font-semibold text-sm">
-                    <div>알람 타입</div>
-                    <div>심볼</div>
-                    <div>트리거 가격</div>
-                    <div>알림 채널</div>
-                    <div>발생 시간</div>
-                  </div>
-                  {alertHistory.map((item, idx) => (
-                    <div key={idx} className="grid grid-cols-5 gap-4 p-4 border-t border-border text-sm">
-                      <div>{item.alert_type}</div>
-                      <div className="font-semibold">{item.symbol}</div>
-                      <div>${item.trigger_price?.toFixed(2)}</div>
-                      <div className="text-muted-foreground">{item.notify_method}</div>
-                      <div>{new Date(item.triggered_at).toLocaleString("ko-KR")}</div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="text-center py-12">
-                  <Clock className="w-12 h-12 text-muted-foreground mx-auto mb-4 opacity-50" />
-                  <p className="text-muted-foreground">발생한 알람이 없습니다</p>
-                </div>
-              )}
-            </div>
-          </AnimateIn>
-        )}
-
-        {/* Settings Tab */}
-        {activeTab === "settings" && (
-          <AnimateIn from="bottom" delay={80}>
-            <div className="max-w-2xl">
-              <div className="bg-card border border-border rounded-lg p-6">
-                <h3 className="font-bold text-lg mb-4">알림 채널 설정</h3>
-
-                <div className="space-y-3 mb-6">
-                  {NOTIFY_CHANNELS.map(channel => (
-                    <div key={channel.value} className="flex items-center gap-3 p-3 hover:bg-muted/50 rounded">
+              <div className="mb-4">
+                <label className="block text-sm font-semibold mb-2">알림 채널</label>
+                <div className="flex gap-4">
+                  {["email", "push", "sms", "telegram", "discord"].map((channel) => (
+                    <label key={channel} className="flex items-center gap-2">
                       <input
                         type="checkbox"
-                        defaultChecked={channel.checked}
-                        className="w-4 h-4"
+                        checked={formData.notificationChannels.includes(channel)}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setFormData({
+                              ...formData,
+                              notificationChannels: [
+                                ...formData.notificationChannels,
+                                channel,
+                              ],
+                            })
+                          } else {
+                            setFormData({
+                              ...formData,
+                              notificationChannels: formData.notificationChannels.filter(
+                                (c) => c !== channel
+                              ),
+                            })
+                          }
+                        }}
+                        className="rounded"
                       />
-                      <label className="flex-1 font-medium text-sm">{channel.label}</label>
-                      {channel.value === "EMAIL" && <span className="text-xs text-muted-foreground">로그인 이메일로 발송</span>}
-                      {channel.value === "PUSH" && <span className="text-xs text-muted-foreground">브라우저 알림</span>}
-                      {channel.value === "SMS" && <span className="text-xs text-muted-foreground">휴대폰 문자메시지</span>}
-                      {channel.value === "TELEGRAM" && <span className="text-xs text-muted-foreground">텔레그램봇</span>}
-                      {channel.value === "DISCORD" && <span className="text-xs text-muted-foreground">디스코드 웹훅</span>}
-                    </div>
+                      <span className="text-sm capitalize">{channel}</span>
+                    </label>
                   ))}
                 </div>
+              </div>
 
-                <div className="border-t pt-6">
-                  <h3 className="font-bold mb-3">조용한 시간</h3>
-                  <div className="flex items-center gap-3">
-                    <span className="text-sm">알람을 받지 않을 시간대:</span>
-                    <input
-                      type="time"
-                      defaultValue="23:00"
-                      className="px-3 py-2 bg-muted border border-border rounded"
-                    />
-                    <span className="text-sm">부터</span>
-                    <input
-                      type="time"
-                      defaultValue="09:00"
-                      className="px-3 py-2 bg-muted border border-border rounded"
-                    />
-                  </div>
-                </div>
-
-                <Button className="mt-6">저장</Button>
+              <div className="flex gap-2">
+                <button
+                  onClick={handleAddAlert}
+                  className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg transition-all"
+                >
+                  추가
+                </button>
+                <button
+                  onClick={() => setShowAddForm(false)}
+                  className="px-6 py-2 bg-muted hover:bg-muted/80 text-foreground font-bold rounded-lg transition-all"
+                >
+                  취소
+                </button>
               </div>
             </div>
           </AnimateIn>
         )}
 
-        {/* Create Alert Dialog */}
-        {showNewAlert && (
-          <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-            <div className="bg-card border border-border rounded-lg shadow-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto">
-              <div className="sticky top-0 bg-card border-b border-border p-6">
-                <h2 className="text-xl font-bold">새 알람 추가</h2>
+        <AnimateIn from="bottom" delay={160}>
+          <div className="space-y-4">
+            {loading ? (
+              <div className="text-center py-8 text-muted-foreground">
+                로딩 중...
               </div>
-
-              <div className="p-6">
-                {!selectedAlertType ? (
-                  <div className="space-y-3">
-                    <p className="text-sm text-muted-foreground mb-4">알람 타입을 선택하세요</p>
-                    {ALERT_TYPES.map(type => (
-                      <button
-                        key={type.value}
-                        onClick={() => setSelectedAlertType(type.value)}
-                        className="w-full text-left p-4 border border-border rounded-lg hover:border-primary hover:bg-primary/5 transition-all"
-                      >
-                        <div className="flex items-start gap-3">
-                          <span className="text-2xl">{type.icon}</span>
-                          <div>
-                            <p className="font-bold">{type.label}</p>
-                            <p className="text-xs text-muted-foreground">{type.desc}</p>
+            ) : alerts.length === 0 ? (
+              <div className="bg-card border border-border rounded-lg p-8 text-center">
+                <Bell className="mx-auto mb-4 text-muted-foreground" size={32} />
+                <p className="text-muted-foreground mb-4">설정된 알람이 없습니다</p>
+                <button
+                  onClick={() => setShowAddForm(true)}
+                  className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-bold"
+                >
+                  첫 번째 알람 추가
+                </button>
+              </div>
+            ) : (
+              <>
+                <div className="space-y-3">
+                  {displayAlerts.map((alert) => (
+                    <div
+                      key={alert.id}
+                      className="bg-card border border-border rounded-lg p-6 hover:border-blue-600 transition-colors"
+                    >
+                      <div className="flex items-start justify-between">
+                        <div className="flex items-start gap-4 flex-1">
+                          <div className="p-2 bg-muted rounded-lg text-blue-600">
+                            {alertTypeIcons[alert.type]}
+                          </div>
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2 mb-1">
+                              <h3 className="text-lg font-bold">{alert.symbol}</h3>
+                              <span className="px-2 py-1 bg-muted rounded text-xs font-semibold">
+                                {alertTypeLabels[alert.type]}
+                              </span>
+                              <span
+                                className={`px-2 py-1 rounded text-xs font-semibold ${
+                                  alert.enabled
+                                    ? "bg-green-600/10 text-green-600"
+                                    : "bg-gray-600/10 text-gray-600"
+                                }`}
+                              >
+                                {alert.enabled ? "활성화" : "비활성화"}
+                              </span>
+                            </div>
+                            <p className="text-sm text-muted-foreground">{alert.name}</p>
+                            <p className="text-sm mt-2">
+                              조건: <span className="font-semibold">{alert.condition}</span> {alert.threshold}
+                            </p>
+                            {alert.notificationChannels.length > 0 && (
+                              <p className="text-xs text-muted-foreground mt-2">
+                                알림: {alert.notificationChannels.join(", ")}
+                              </p>
+                            )}
+                            {alert.lastTriggered && (
+                              <p className="text-xs text-muted-foreground mt-1">
+                                마지막 발동: {alert.lastTriggered}
+                              </p>
+                            )}
                           </div>
                         </div>
-                      </button>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="space-y-4">
-                    <button
-                      onClick={() => setSelectedAlertType(null)}
-                      className="text-sm text-primary hover:underline"
-                    >
-                      ← 뒤로 가기
-                    </button>
 
-                    <div>
-                      <label className="block text-sm font-medium mb-2">심볼</label>
-                      <input
-                        type="text"
-                        value={newAlert.symbol}
-                        onChange={(e) => setNewAlert({ ...newAlert, symbol: e.target.value.toUpperCase() })}
-                        placeholder="QQQ"
-                        className="w-full px-3 py-2 bg-muted border border-border rounded text-sm"
-                      />
-                    </div>
-
-                    {selectedAlertType === "PRICE" && (
-                      <div className="space-y-3">
-                        <div>
-                          <label className="block text-sm font-medium mb-2">조건</label>
-                          <select
-                            value={newAlert.condition}
-                            onChange={(e) => setNewAlert({ ...newAlert, condition: e.target.value })}
-                            className="w-full px-3 py-2 bg-muted border border-border rounded text-sm"
-                          >
-                            <option value="ABOVE">이상</option>
-                            <option value="BELOW">이하</option>
-                            <option value="BETWEEN">범위</option>
-                          </select>
-                        </div>
-                        <div>
-                          <label className="block text-sm font-medium mb-2">가격</label>
-                          <input
-                            type="number"
-                            value={newAlert.trigger_price}
-                            onChange={(e) => setNewAlert({ ...newAlert, trigger_price: Number(e.target.value) })}
-                            placeholder="150.00"
-                            className="w-full px-3 py-2 bg-muted border border-border rounded text-sm"
-                          />
-                        </div>
-                      </div>
-                    )}
-
-                    <div>
-                      <label className="block text-sm font-medium mb-2">알림 채널</label>
-                      <div className="flex flex-wrap gap-2">
-                        {["PUSH", "EMAIL"].map(channel => (
+                        <div className="flex gap-2">
                           <button
-                            key={channel}
-                            onClick={() => {
-                              if (newAlert.notify_methods.includes(channel)) {
-                                setNewAlert({
-                                  ...newAlert,
-                                  notify_methods: newAlert.notify_methods.filter(m => m !== channel)
-                                })
-                              } else {
-                                setNewAlert({
-                                  ...newAlert,
-                                  notify_methods: [...newAlert.notify_methods, channel]
-                                })
-                              }
-                            }}
-                            className={`px-3 py-2 text-sm rounded border transition-all ${
-                              newAlert.notify_methods.includes(channel)
-                                ? "border-primary bg-primary/20 text-primary"
-                                : "border-border hover:border-primary"
+                            onClick={() => handleToggleAlert(alert.id)}
+                            className={`p-2 rounded-lg transition-all ${
+                              alert.enabled
+                                ? "hover:bg-yellow-600/10 text-yellow-600"
+                                : "hover:bg-green-600/10 text-green-600"
                             }`}
+                            title={alert.enabled ? "비활성화" : "활성화"}
                           >
-                            {channel === "PUSH" ? "푸시" : "이메일"}
+                            <Toggle2 size={18} />
                           </button>
-                        ))}
+                          <button
+                            onClick={() => handleDeleteAlert(alert.id)}
+                            className="p-2 hover:bg-red-600/10 rounded-lg transition-all text-red-600"
+                            title="삭제"
+                          >
+                            <Trash2 size={18} />
+                          </button>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                )}
-              </div>
-
-              {selectedAlertType && (
-                <div className="sticky bottom-0 bg-card border-t border-border p-6 flex gap-3">
-                  <Button onClick={handleCreateAlert} className="flex-1">
-                    추가
-                  </Button>
-                  <Button onClick={() => setShowNewAlert(false)} variant="outline" className="flex-1">
-                    취소
-                  </Button>
+                  ))}
                 </div>
-              )}
-            </div>
+
+                {alerts.length > pagination.pageSize && (
+                  <Pagination
+                    state={pagination}
+                    pageRange={pagination.pageRange}
+                    hasNextPage={pagination.hasNextPage}
+                    hasPrevPage={pagination.hasPrevPage}
+                    onPreviousPage={pagination.prevPage}
+                    onNextPage={pagination.nextPage}
+                    onGoToPage={pagination.goToPage}
+                    onChangePageSize={pagination.changePageSize}
+                  />
+                )}
+              </>
+            )}
           </div>
-        )}
+        </AnimateIn>
+
+        <ToastContainer toasts={toasts} onRemove={removeToast} />
       </div>
     </div>
   )
