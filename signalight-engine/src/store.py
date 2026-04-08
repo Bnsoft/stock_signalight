@@ -49,6 +49,8 @@ def _connect() -> sqlite3.Connection:
 
 def init_db() -> None:
     """Create local SQLite tables and seed the default watchlist."""
+    import pathlib
+    pathlib.Path(DB_PATH).parent.mkdir(parents=True, exist_ok=True)
     with _connect() as conn:
         conn.executescript("""
             CREATE TABLE IF NOT EXISTS signals (

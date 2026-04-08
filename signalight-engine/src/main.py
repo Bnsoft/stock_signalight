@@ -34,8 +34,10 @@ realtime_manager = RealtimeUpdateManager()
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Startup and shutdown events"""
-    # Startup
-    print("Starting Signalight API...")
+    # Startup — initialize DB tables
+    from . import store as db_store
+    db_store.init_db()
+    print("Starting Signalight API — DB initialized")
     yield
     # Shutdown
     print("Shutting down Signalight API...")

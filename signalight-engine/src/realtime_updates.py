@@ -207,6 +207,15 @@ class RealtimeUpdateManager:
             await asyncio.sleep(15)
 
 
+    async def shutdown(self):
+        """Cancel all running stream tasks on app shutdown."""
+        for task in list(self._stream_tasks.values()):
+            if not task.done():
+                task.cancel()
+        self._stream_tasks.clear()
+        self.active_connections.clear()
+
+
 # Global singleton
 realtime_manager = RealtimeUpdateManager()
 
