@@ -1,4 +1,4 @@
-"""Options Analysis - 옵션 분석"""
+"""Options Analysis - Options pricing, Greeks, and strategy tools"""
 
 import math
 from datetime import datetime, timedelta
@@ -154,16 +154,16 @@ def get_options_chain(
     symbol: str,
     expiration_date: Optional[str] = None
 ) -> Dict:
-    """옵션 체인 조회"""
-    # 시뮬레이션 데이터
-    current_price = 450  # SPY 기준 가격
+    """Retrieve options chain"""
+    # Simulated data
+    current_price = 450  # Reference price based on SPY
 
     calls = []
     puts = []
 
     strikes = [400, 420, 430, 440, 450, 460, 470, 480, 500]
-    risk_free_rate = 0.05  # 5%
-    volatility = 0.25  # 25%
+    risk_free_rate = 0.05  # 5% risk-free rate
+    volatility = 0.25  # 25% implied volatility
     days_to_expiration = 30
     T = days_to_expiration / 365
 
@@ -223,7 +223,7 @@ def get_options_chain(
 
 
 def get_available_expirations(symbol: str) -> List[Dict]:
-    """만료 기한 목록 조회"""
+    """Retrieve list of available expiration dates"""
     today = datetime.now()
 
     expirations = []
@@ -247,10 +247,10 @@ def calculate_implied_volatility(
     option_type: str = "CALL",
     initial_guess: float = 0.3,
 ) -> float:
-    """Newton-Raphson을 사용한 내재 변동성 계산"""
+    """Calculate implied volatility using Newton-Raphson"""
     sigma = initial_guess
 
-    for _ in range(100):  # 최대 100회 반복
+    for _ in range(100):  # Maximum 100 iterations
         if option_type == "CALL":
             price = black_scholes_call(S, K, r, sigma, T)
             vega = calculate_vega(S, K, r, sigma, T)
@@ -258,7 +258,7 @@ def calculate_implied_volatility(
             price = black_scholes_put(S, K, r, sigma, T)
             vega = calculate_vega(S, K, r, sigma, T)
 
-        if abs(price - option_price) < 0.01:  # 수렴
+        if abs(price - option_price) < 0.01:  # Converged
             return sigma
 
         if vega < 1e-10:
@@ -273,7 +273,7 @@ def calculate_implied_volatility(
 
 
 def get_option_strategies() -> List[Dict]:
-    """옵션 전략 목록"""
+    """List of option strategies"""
     return [
         {
             "name": "Long Call",
@@ -335,7 +335,7 @@ def calculate_option_Greeks(
     option_type: str = "CALL",
     risk_free_rate: float = 0.05,
 ) -> Dict:
-    """옵션 그릭스 계산"""
+    """Calculate option Greeks"""
     T = days_to_expiration / 365
 
     return {
@@ -362,7 +362,7 @@ def save_option_position(
     quantity: int,
     premium_paid: float,
 ) -> Dict:
-    """옵션 포지션 저장"""
+    """Save option position"""
     import json
 
     with store._connect() as conn:

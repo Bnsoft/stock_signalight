@@ -1,4 +1,4 @@
-"""Dashboard Routes - 대시보드 레이아웃 API 라우트"""
+"""Dashboard Routes - Dashboard layout API routes"""
 
 from fastapi import APIRouter, Query
 import json
@@ -9,7 +9,7 @@ router = APIRouter(prefix="/api/dashboard", tags=["dashboard"])
 
 @router.get("/layouts/{user_id}")
 async def get_layouts(user_id: str):
-    """사용자의 모든 대시보드 레이아웃 조회"""
+    """Retrieve all dashboard layouts for a user"""
     try:
         from . import store
 
@@ -41,7 +41,7 @@ async def get_layouts(user_id: str):
 
 @router.post("/layouts/{user_id}")
 async def create_or_update_layout(user_id: str, data: dict):
-    """대시보드 레이아웃 저장"""
+    """Save a dashboard layout"""
     try:
         from . import store
 
@@ -51,7 +51,7 @@ async def create_or_update_layout(user_id: str, data: dict):
         is_default = data.get("isDefault", False)
 
         with store._connect() as conn:
-            # 기존 레이아웃 확인
+            # Check if layout already exists
             existing = conn.execute(
                 """SELECT layout_id FROM dashboard_layouts
                    WHERE user_id = ? AND layout_id = ?""",
@@ -59,7 +59,7 @@ async def create_or_update_layout(user_id: str, data: dict):
             ).fetchone()
 
             if existing:
-                # 업데이트
+                # Update existing layout
                 conn.execute(
                     """UPDATE dashboard_layouts
                        SET layout_name = ?, widgets = ?, is_default = ?, updated_at = datetime('now')
@@ -67,7 +67,7 @@ async def create_or_update_layout(user_id: str, data: dict):
                     (layout_name, json.dumps(widgets), int(is_default), user_id, layout_id),
                 )
             else:
-                # 생성
+                # Create new layout
                 conn.execute(
                     """INSERT INTO dashboard_layouts
                        (user_id, layout_id, layout_name, widgets, is_default, created_at, updated_at)
@@ -88,7 +88,7 @@ async def create_or_update_layout(user_id: str, data: dict):
 
 @router.delete("/layouts/{user_id}/{layout_id}")
 async def delete_layout(user_id: str, layout_id: str):
-    """대시보드 레이아웃 삭제"""
+    """Delete a dashboard layout"""
     try:
         from . import store
 
@@ -110,7 +110,7 @@ async def delete_layout(user_id: str, layout_id: str):
 
 @router.get("/widgets")
 async def get_available_widgets():
-    """사용 가능한 모든 위젯 목록"""
+    """List all available widgets"""
     return {
         "widgets": [
             {
@@ -189,7 +189,7 @@ async def get_available_widgets():
 
 @router.post("/save-preferences/{user_id}")
 async def save_dashboard_preferences(user_id: str, data: dict):
-    """대시보드 사용자 설정 저장"""
+    """Save dashboard user preferences"""
     try:
         from . import store
 
@@ -217,7 +217,7 @@ async def save_dashboard_preferences(user_id: str, data: dict):
 
 @router.get("/preferences/{user_id}")
 async def get_dashboard_preferences(user_id: str):
-    """대시보드 사용자 설정 조회"""
+    """Retrieve dashboard user preferences"""
     try:
         from . import store
 

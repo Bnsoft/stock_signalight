@@ -1,4 +1,4 @@
-"""Data Export - 데이터 내보내기 (CSV, PDF, Excel)"""
+"""Data Export - Export data to CSV, PDF, and Excel formats"""
 
 from datetime import datetime, timedelta
 from typing import List, Dict, Optional, BinaryIO
@@ -11,7 +11,7 @@ from . import store
 # ============= CSV Export =============
 
 def export_portfolio_to_csv(user_id: str) -> str:
-    """포트폴리오를 CSV로 내보내기"""
+    """Export portfolio to CSV"""
     with store._connect() as conn:
         positions = conn.execute(
             """SELECT symbol, quantity, entry_price, current_price, position_value,
@@ -66,7 +66,7 @@ def export_backtest_results_to_csv(
     strategy: str,
     backtest_data: Dict,
 ) -> str:
-    """백테스트 결과를 CSV로 내보내기"""
+    """Export backtest results to CSV"""
     csv_buffer = StringIO()
     writer = csv.writer(csv_buffer)
 
@@ -76,7 +76,7 @@ def export_backtest_results_to_csv(
     writer.writerow([f"생성일: {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')}"])
     writer.writerow([])
 
-    # 주요 지표
+    # Key metrics
     writer.writerow(["지표", "값"])
     writer.writerow(["초기 자본", f"${backtest_data.get('initial_capital', 0):.2f}"])
     writer.writerow(["최종 자본", f"${backtest_data.get('final_value', 0):.2f}"])
@@ -92,7 +92,7 @@ def export_backtest_results_to_csv(
 
 
 def export_alerts_to_csv(user_id: str) -> str:
-    """알람을 CSV로 내보내기"""
+    """Export alerts to CSV"""
     with store._connect() as conn:
         alerts = conn.execute(
             """SELECT id, symbol, alert_type, trigger_price, notify_methods, status, created_at
@@ -136,7 +136,7 @@ def export_alerts_to_csv(user_id: str) -> str:
 
 
 def export_transactions_to_csv(user_id: str, start_date: Optional[str] = None) -> str:
-    """거래 이력을 CSV로 내보내기"""
+    """Export transaction history to CSV"""
     with store._connect() as conn:
         query = """SELECT symbol, order_type, quantity, price, created_at, status
                    FROM broker_orders
@@ -179,12 +179,12 @@ def export_transactions_to_csv(user_id: str, start_date: Optional[str] = None) -
 # ============= Excel Export =============
 
 def export_portfolio_to_excel(user_id: str) -> bytes:
-    """포트폴리오를 Excel로 내보내기"""
+    """Export portfolio to Excel"""
     try:
         import openpyxl
         from openpyxl.styles import Font, PatternFill, Alignment
     except ImportError:
-        # openpyxl이 없으면 CSV로 반환
+        # Fall back to CSV if openpyxl is not available
         return export_portfolio_to_csv(user_id).encode('utf-8')
 
     with store._connect() as conn:
@@ -204,7 +204,7 @@ def export_portfolio_to_excel(user_id: str) -> bytes:
     headers = ["종목", "수량", "진입가", "현재가", "포지션 가치", "손익", "수익률(%)"]
     ws.append(headers)
 
-    # Header 스타일
+    # Header style
     header_fill = PatternFill(start_color="4472C4", end_color="4472C4", fill_type="solid")
     header_font = Font(bold=True, color="FFFFFF")
 
@@ -251,7 +251,7 @@ def export_portfolio_to_excel(user_id: str) -> bytes:
 # ============= PDF Export =============
 
 def export_portfolio_to_pdf(user_id: str) -> bytes:
-    """포트폴리오를 PDF로 내보내기"""
+    """Export portfolio to PDF"""
     try:
         from reportlab.lib.pagesizes import letter, A4
         from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
@@ -259,7 +259,7 @@ def export_portfolio_to_pdf(user_id: str) -> bytes:
         from reportlab.lib.units import inch
         from reportlab.lib import colors
     except ImportError:
-        # reportlab이 없으면 CSV 반환
+        # Fall back to CSV if reportlab is not available
         return export_portfolio_to_csv(user_id).encode('utf-8')
 
     with store._connect() as conn:
@@ -332,12 +332,12 @@ def export_portfolio_to_pdf(user_id: str) -> bytes:
 # ============= Report Generation =============
 
 def generate_monthly_report(user_id: str, year: int, month: int) -> Dict:
-    """월간 리포트 생성"""
+    """Generate monthly report"""
     start_date = f"{year}-{month:02d}-01"
     end_date = f"{year}-{month:02d}-28"
 
     with store._connect() as conn:
-        # 거래 조회
+        # Fetch trades
         trades = conn.execute(
             """SELECT symbol, quantity, price, created_at FROM broker_orders
                WHERE user_id = ? AND created_at BETWEEN ? AND ? AND status = 'FILLED'
@@ -345,7 +345,7 @@ def generate_monthly_report(user_id: str, year: int, month: int) -> Dict:
             (user_id, start_date, end_date),
         ).fetchall()
 
-        # 포트폴리오 상태
+        # Portfolio state
         positions = conn.execute(
             """SELECT symbol, quantity, position_value, position_pnl, position_return
                FROM positions WHERE user_id = ?""",
@@ -370,7 +370,7 @@ def generate_monthly_report(user_id: str, year: int, month: int) -> Dict:
 
 
 def generate_annual_report(user_id: str, year: int) -> Dict:
-    """연간 리포트 생성"""
+    """Generate annual report"""
     start_date = f"{year}-01-01"
     end_date = f"{year}-12-31"
 
@@ -410,12 +410,12 @@ def generate_annual_report(user_id: str, year: int) -> Dict:
 
 
 def export_report_to_json(report: Dict) -> str:
-    """리포트를 JSON으로 내보내기"""
+    """Export report to JSON"""
     return json.dumps(report, indent=2, ensure_ascii=False, default=str)
 
 
 def create_export_summary(user_id: str) -> Dict:
-    """내보내기 요약"""
+    """Export summary"""
     return {
         "user_id": user_id,
         "export_timestamp": datetime.utcnow().isoformat(),

@@ -146,17 +146,78 @@ export default function AdvancedTradingPage() {
 }
 
 function CreateAdvancedOrderForm({ onClose }: { onClose: () => void }) {
+  const { user, token } = useAuth()
+  const [submitting, setSubmitting] = useState(false)
   const [formData, setFormData] = useState({
     symbol: "SPY",
     quantity: 100,
-    orderType: "OCO" as const,
+    orderType: "OCO" as "OCO" | "BRACKET" | "SCALE" | "CONDITIONAL",
     primaryPrice: 450,
     secondaryPrice: 440,
+    takeProfitPrice: 460,
+    stopLossPrice: 440,
+    scaleSteps: 4,
   })
 
   const handleSubmit = async () => {
-    // API call to create order
-    onClose()
+    if (!user?.user_id || !token) return
+    setSubmitting(true)
+    try {
+      let endpoint = ""
+      let body: any = {}
+
+      if (formData.orderType === "OCO") {
+        endpoint = `/api/orders/oco?user_id=${user.user_id}`
+        body = {
+          symbol: formData.symbol,
+          quantity: formData.quantity,
+          primary_price: formData.primaryPrice,
+          secondary_price: formData.secondaryPrice,
+          order_side: "SELL",
+          primary_type: "LIMIT",
+          secondary_type: "STOP",
+        }
+      } else if (formData.orderType === "BRACKET") {
+        endpoint = `/api/orders/bracket?user_id=${user.user_id}`
+        body = {
+          symbol: formData.symbol,
+          quantity: formData.quantity,
+          entry_price: formData.primaryPrice,
+          take_profit_price: formData.takeProfitPrice,
+          stop_loss_price: formData.stopLossPrice,
+          order_side: "BUY",
+        }
+      } else if (formData.orderType === "SCALE") {
+        const step = (formData.primaryPrice - formData.secondaryPrice) / (formData.scaleSteps - 1)
+        const prices = Array.from({ length: formData.scaleSteps }, (_, i) =>
+          parseFloat((formData.primaryPrice - step * i).toFixed(2))
+        )
+        endpoint = `/api/orders/scale?user_id=${user.user_id}`
+        body = {
+          symbol: formData.symbol,
+          total_quantity: formData.quantity,
+          entry_prices: prices,
+          order_side: "BUY",
+        }
+      }
+
+      const res = await fetch(`${API_BASE}${endpoint}`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(body),
+      })
+
+      if (res.ok) {
+        onClose()
+      }
+    } catch (err) {
+      console.error("Failed to create order:", err)
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   return (
@@ -165,21 +226,20 @@ function CreateAdvancedOrderForm({ onClose }: { onClose: () => void }) {
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
         <div>
-          <label className="block text-sm font-semibold mb-2">주문 타입</label>
+          <label className="block text-sm font-semibold mb-2">Order Type</label>
           <select
             value={formData.orderType}
             onChange={(e) => setFormData({ ...formData, orderType: e.target.value as any })}
             className="w-full px-4 py-2 bg-muted border border-border rounded-lg text-foreground"
           >
             <option value="OCO">OCO (One Cancels Other)</option>
-            <option value="CONDITIONAL">조건부 주문</option>
-            <option value="BRACKET">괄호 주문</option>
-            <option value="SCALE">스케일 주문</option>
+            <option value="BRACKET">Bracket Order</option>
+            <option value="SCALE">Scale In/Out</option>
           </select>
         </div>
 
         <div>
-          <label className="block text-sm font-semibold mb-2">종목</label>
+          <label className="block text-sm font-semibold mb-2">Symbol</label>
           <input
             type="text"
             value={formData.symbol}
@@ -190,7 +250,7 @@ function CreateAdvancedOrderForm({ onClose }: { onClose: () => void }) {
         </div>
 
         <div>
-          <label className="block text-sm font-semibold mb-2">수량</label>
+          <label className="block text-sm font-semibold mb-2">Quantity</label>
           <input
             type="number"
             value={formData.quantity}
@@ -200,7 +260,9 @@ function CreateAdvancedOrderForm({ onClose }: { onClose: () => void }) {
         </div>
 
         <div>
-          <label className="block text-sm font-semibold mb-2">Primary Price</label>
+          <label className="block text-sm font-semibold mb-2">
+            {formData.orderType === "OCO" ? "Take Profit Price" : "Entry Price"}
+          </label>
           <input
             type="number"
             value={formData.primaryPrice}
@@ -209,33 +271,73 @@ function CreateAdvancedOrderForm({ onClose }: { onClose: () => void }) {
             className="w-full px-4 py-2 bg-muted border border-border rounded-lg text-foreground"
           />
         </div>
-      </div>
 
-      {formData.orderType === "OCO" && (
-        <div className="mb-6">
-          <label className="block text-sm font-semibold mb-2">Secondary Price (Stop Loss)</label>
-          <input
-            type="number"
-            value={formData.secondaryPrice}
-            onChange={(e) => setFormData({ ...formData, secondaryPrice: parseFloat(e.target.value) })}
-            step="0.01"
-            className="w-full px-4 py-2 bg-muted border border-border rounded-lg text-foreground"
-          />
-        </div>
-      )}
+        {(formData.orderType === "OCO" || formData.orderType === "SCALE") && (
+          <div>
+            <label className="block text-sm font-semibold mb-2">Stop Loss Price</label>
+            <input
+              type="number"
+              value={formData.secondaryPrice}
+              onChange={(e) => setFormData({ ...formData, secondaryPrice: parseFloat(e.target.value) })}
+              step="0.01"
+              className="w-full px-4 py-2 bg-muted border border-border rounded-lg text-foreground"
+            />
+          </div>
+        )}
+
+        {formData.orderType === "BRACKET" && (
+          <>
+            <div>
+              <label className="block text-sm font-semibold mb-2">Take Profit Price</label>
+              <input
+                type="number"
+                value={formData.takeProfitPrice}
+                onChange={(e) => setFormData({ ...formData, takeProfitPrice: parseFloat(e.target.value) })}
+                step="0.01"
+                className="w-full px-4 py-2 bg-muted border border-border rounded-lg text-foreground"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-semibold mb-2">Stop Loss Price</label>
+              <input
+                type="number"
+                value={formData.stopLossPrice}
+                onChange={(e) => setFormData({ ...formData, stopLossPrice: parseFloat(e.target.value) })}
+                step="0.01"
+                className="w-full px-4 py-2 bg-muted border border-border rounded-lg text-foreground"
+              />
+            </div>
+          </>
+        )}
+
+        {formData.orderType === "SCALE" && (
+          <div>
+            <label className="block text-sm font-semibold mb-2">Number of Steps</label>
+            <input
+              type="number"
+              value={formData.scaleSteps}
+              onChange={(e) => setFormData({ ...formData, scaleSteps: parseInt(e.target.value) })}
+              min={2}
+              max={10}
+              className="w-full px-4 py-2 bg-muted border border-border rounded-lg text-foreground"
+            />
+          </div>
+        )}
+      </div>
 
       <div className="flex gap-2">
         <button
           onClick={handleSubmit}
-          className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg transition-all"
+          disabled={submitting}
+          className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-bold py-3 rounded-lg transition-all"
         >
-          주문 생성
+          {submitting ? "Creating..." : "Create Order"}
         </button>
         <button
           onClick={onClose}
           className="flex-1 bg-muted hover:bg-muted/80 text-foreground font-bold py-3 rounded-lg transition-all"
         >
-          취소
+          Cancel
         </button>
       </div>
     </div>

@@ -7,11 +7,13 @@ import json
 
 from fastapi import FastAPI, HTTPException, WebSocket, Depends, status
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
+from typing import List, Dict, Optional
 
 app = FastAPI(title="Signalight API", version="0.1.0")
 
-# CORS 설정
+# CORS configuration
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -26,7 +28,7 @@ from . import store as db_store
 
 @app.get("/health")
 async def health():
-    """헬스체크"""
+    """Health check"""
     return {"status": "ok", "timestamp": datetime.utcnow().isoformat()}
 
 
@@ -37,19 +39,19 @@ async def get_signals(
     limit: int = 100,
     offset: int = 0,
 ):
-    """최근 신호 조회
+    """Retrieve recent signals
 
     Args:
-        symbol: 특정 심볼만 조회 (e.g., "QQQ")
-        signal_type: 신호 타입으로 필터링 (e.g., "ACTION", "WARNING")
-        limit: 반환 개수 (기본 100)
-        offset: 스킵 개수 (페이지네이션)
+        symbol: Filter by specific symbol (e.g., "QQQ")
+        signal_type: Filter by signal type (e.g., "ACTION", "WARNING")
+        limit: Number of results to return (default 100)
+        offset: Number of results to skip (pagination)
     """
     try:
         conn = db_store._connect()
         cursor = conn.cursor()
 
-        # 필터링과 함께 신호 조회
+        # Fetch signals with filtering
         query = "SELECT id, timestamp, symbol, signal_type, severity, message FROM signals WHERE 1=1"
         params = []
 
@@ -92,21 +94,21 @@ async def get_candles(
     period: str = "1D",
     limit: int = 60,
 ):
-    """캔들 데이터 조회
+    """Retrieve candle (OHLCV) data
 
     Args:
-        symbol: 종목 심볼 (e.g., "QQQ")
-        period: 기간 (1D, 1W, 1M, etc.)
-        limit: 캔들 개수 (기본 60)
+        symbol: Stock symbol (e.g., "QQQ")
+        period: Time period (1D, 1W, 1M, etc.)
+        limit: Number of candles to return (default 60)
     """
     from .market import fetch_daily_data
 
     try:
-        # 기간을 yfinance 형식으로 변환
+        # Convert period to yfinance format
         period_map = {"1D": "1d", "1W": "1wk", "1M": "1mo"}
         yf_period = period_map.get(period, "1d")
 
-        # 캔들 데이터 fetch (동기 호출)
+        # Fetch candle data (synchronous call)
         df = fetch_daily_data(symbol, period=yf_period)
         df = df.tail(limit)
 
@@ -130,12 +132,12 @@ async def get_candles(
 
 @app.get("/api/indicators")
 async def get_indicators(symbol: str):
-    """최신 인디케이터 값 조회
+    """Retrieve the latest indicator values
 
     Args:
-        symbol: 종목 심볼
+        symbol: Stock symbol
     """
-    # TODO: 실제 인디케이터 계산 및 캐싱 구현
+    # TODO: Implement actual indicator calculation and caching
     from .market import fetch_daily_data
     from .pulse import get_all_indicators
 
@@ -155,7 +157,7 @@ async def get_indicators(symbol: str):
 
 @app.get("/api/watchlist")
 async def get_watchlist():
-    """워치리스트 조회"""
+    """Retrieve watchlist"""
     try:
         conn = db_store._connect()
         cursor = conn.cursor()
@@ -179,19 +181,19 @@ connected_clients: list[WebSocket] = []
 
 @app.websocket("/ws/signals")
 async def websocket_signals(websocket: WebSocket):
-    """WebSocket 엔드포인트 — 실시간 신호 스트림."""
+    """WebSocket endpoint — real-time signal stream."""
     await websocket.accept()
     connected_clients.append(websocket)
 
     try:
-        # 클라이언트는 연결을 유지하고 서버에서 메시지를 대기
+        # Client keeps the connection alive and waits for messages from the server
         while True:
-            # 주기적으로 최신 신호를 전송 (매 10초)
+            # Periodically send the latest signals (every 10 seconds)
             try:
                 conn = db_store._connect()
                 cursor = conn.cursor()
 
-                # 최근 5개 신호 조회
+                # Fetch the 5 most recent signals
                 cursor.execute(
                     "SELECT id, timestamp, symbol, signal_type, severity, message FROM signals ORDER BY timestamp DESC LIMIT 5"
                 )
@@ -214,7 +216,7 @@ async def websocket_signals(websocket: WebSocket):
             except Exception:
                 pass
 
-            await asyncio.sleep(10)  # 10초마다 업데이트
+            await asyncio.sleep(10)  # Update every 10 seconds
 
     except Exception:
         pass
@@ -224,7 +226,7 @@ async def websocket_signals(websocket: WebSocket):
 
 
 async def broadcast_signal(signal: dict):
-    """새 신호를 모든 연결된 클라이언트에 브로드캐스트."""
+    """Broadcast a new signal to all connected clients."""
     for client in connected_clients:
         try:
             await client.send_json({"new_signal": signal})
@@ -234,11 +236,11 @@ async def broadcast_signal(signal: dict):
 
 @app.get("/api/signal-stats")
 async def get_signal_stats(symbol: Optional[str] = None):
-    """신호별 성과 통계 조회"""
+    """Retrieve performance statistics per signal type"""
     try:
         stats = db_store.get_signal_performance_stats(symbol)
 
-        # 딕셔너리를 리스트로 변환
+        # Convert dictionary to list
         stats_list = [
             {
                 "signal_type": sig_type,
@@ -254,7 +256,7 @@ async def get_signal_stats(symbol: Optional[str] = None):
 
 @app.get("/api/indicator-stats")
 async def get_indicator_stats(indicator_name: Optional[str] = None):
-    """인디케이터별 정확도 조회"""
+    """Retrieve accuracy per indicator"""
     try:
         stats = db_store.get_indicator_accuracy(indicator_name)
         return {"stats": stats}
@@ -264,7 +266,7 @@ async def get_indicator_stats(indicator_name: Optional[str] = None):
 
 @app.get("/api/backtest-results")
 async def get_backtest_results(symbol: Optional[str] = None, limit: int = 10):
-    """백테스트 결과 조회"""
+    """Retrieve backtest results"""
     try:
         results = db_store.get_backtest_results(symbol, limit)
         return {"results": results, "count": len(results)}
@@ -274,7 +276,7 @@ async def get_backtest_results(symbol: Optional[str] = None, limit: int = 10):
 
 @app.get("/api/backtest-run")
 async def run_backtest(symbol: str, days: int = 90):
-    """새로운 백테스트 실행"""
+    """Run a new backtest"""
     from .backtest import simple_backtest
 
     try:
@@ -311,7 +313,7 @@ def _cache_set(key: str, value: any):
 
 @app.get("/api/export-stats")
 async def export_stats(symbol: Optional[str] = None, format: str = "json"):
-    """신호 통계 내보내기 (JSON/CSV)"""
+    """Export signal statistics (JSON/CSV)"""
     try:
         # Cache check
         cache_key = f"stats_export_{symbol}_{format}"
@@ -347,20 +349,20 @@ notification_prefs: dict = {}
 
 @app.post("/api/notification-settings")
 async def update_notification_settings(user_id: str, prefs: dict):
-    """사용자 알림 설정 업데이트."""
+    """Update user notification settings."""
     notification_prefs[user_id] = prefs
     return {"status": "ok", "user_id": user_id}
 
 
 @app.get("/api/notification-settings")
 async def get_notification_settings(user_id: str):
-    """사용자 알림 설정 조회."""
+    """Retrieve user notification settings."""
     return {"settings": notification_prefs.get(user_id, {})}
 
 
 @app.post("/api/test-notification")
 async def test_notification(channel: str, user_id: str = "default"):
-    """알림 채널 테스트."""
+    """Test notification channel."""
     from .notifier import notify_all_channels
 
     prefs = notification_prefs.get(user_id, {})
@@ -385,14 +387,14 @@ user_preferences: dict = {}
 
 @app.post("/api/user-settings")
 async def save_user_settings(user_id: str, settings: dict):
-    """사용자 설정 저장."""
+    """Save user settings."""
     user_preferences[user_id] = settings
     return {"status": "ok"}
 
 
 @app.get("/api/user-settings")
 async def get_user_settings(user_id: str = "default"):
-    """사용자 설정 조회."""
+    """Retrieve user settings."""
     return {"settings": user_preferences.get(user_id, {})}
 
 
@@ -402,7 +404,7 @@ paper_trades: dict = {}
 
 @app.post("/api/paper-trade")
 async def create_paper_trade(user_id: str, symbol: str, quantity: int, entry_price: float):
-    """종이 거래 진입."""
+    """Enter a paper trade."""
     trade_id = f"{user_id}_{symbol}_{datetime.utcnow().timestamp()}"
     paper_trades[trade_id] = {
         "symbol": symbol,
@@ -416,7 +418,7 @@ async def create_paper_trade(user_id: str, symbol: str, quantity: int, entry_pri
 
 @app.get("/api/paper-trades")
 async def get_paper_trades(user_id: str = "default"):
-    """종이 거래 조회."""
+    """Retrieve paper trades."""
     trades = [t for tid, t in paper_trades.items() if tid.startswith(user_id)]
     return {"trades": trades, "count": len(trades)}
 
@@ -424,7 +426,7 @@ async def get_paper_trades(user_id: str = "default"):
 # ============= Phase 8: Sector Heatmap =============
 @app.get("/api/sector-heatmap")
 async def get_sector_heatmap():
-    """섹터별 성과 열량도."""
+    """Sector performance heatmap."""
     sectors = {
         "Technology": {"QQQ": 2.5, "TQQQ": 5.2, "QQQI": 1.8},
         "Broad": {"SPY": 1.2, "SPYI": 2.1},
@@ -435,7 +437,7 @@ async def get_sector_heatmap():
 
 @app.get("/api/correlation-matrix")
 async def get_correlation_matrix():
-    """심볼 상관관계 매트릭스."""
+    """Symbol correlation matrix."""
     symbols = ["QQQ", "SPY", "TQQQ", "QLD"]
     correlation = {
         "QQQ": {"QQQ": 1.0, "SPY": 0.85, "TQQQ": 0.95, "QLD": 0.92},
@@ -1858,7 +1860,7 @@ async def start_mirror_trading(user_id: str, trader_id: str, allocation_percent:
         raise HTTPException(status_code=500, detail=str(e))
 
 
-# ============= Advanced Alerts System (고급 알람 시스템) =============
+# ============= Advanced Alerts System =============
 
 class PriceAlertRequest(BaseModel):
     symbol: str
@@ -2326,9 +2328,9 @@ async def get_backtest_results(symbol: str, limit: int = 10):
 
 @app.websocket("/ws/realtime/{symbol}")
 async def websocket_realtime_updates(websocket: WebSocket, symbol: str):
-    """실시간 가격 및 차트 데이터 웹소켓 연결
+    """WebSocket connection for real-time price and chart data
 
-    사용 예시:
+    Usage example:
     const ws = new WebSocket('ws://localhost:8000/ws/realtime/SPY');
     ws.onmessage = (event) => {
       const data = JSON.parse(event.data);
@@ -2343,15 +2345,15 @@ async def websocket_realtime_updates(websocket: WebSocket, symbol: str):
     await websocket.accept()
 
     try:
-        # 심볼 스트림 시작
+        # Start symbol stream
         await realtime_updates.StreamTask.start_stream(symbol)
 
-        # 연결 등록
+        # Register connection
         await realtime_updates.realtime_manager.connect(
             websocket, symbol.upper(), connection_id
         )
 
-        # 클라이언트 메시지 수신 및 처리
+        # Receive and process client messages
         while True:
             data = await websocket.receive_text()
             message = json.loads(data)
@@ -2377,28 +2379,764 @@ async def websocket_realtime_updates(websocket: WebSocket, symbol: str):
     except Exception as e:
         print(f"WebSocket error: {e}")
     finally:
-        # 연결 정리
+        # Clean up connection
         for sub_symbol in list(realtime_updates.realtime_manager.subscriptions.get(connection_id, set())):
             await realtime_updates.realtime_manager.disconnect(websocket, sub_symbol, connection_id)
 
-        # 더 이상 구독자가 없으면 스트림 중지
+        # Stop stream if there are no more subscribers
         if symbol.upper() not in realtime_updates.realtime_manager.active_connections:
             await realtime_updates.StreamTask.stop_stream(symbol.upper())
 
 
 @app.get("/api/realtime/market-status")
 async def get_market_status():
-    """현재 시장 상태 조회"""
+    """Get current market status"""
     from . import realtime_updates
     return realtime_updates.get_current_market_status()
 
 
 @app.get("/api/realtime/price/{symbol}")
 async def get_realtime_price(symbol: str):
-    """실시간 가격 조회 (WebSocket 없이)"""
+    """Get real-time price (without WebSocket)"""
     from . import realtime_updates
     try:
         price_data = realtime_updates.get_price_update_for_symbol(symbol)
         return price_data
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============= Phase D: Advanced Trading Orders =============
+
+class OcoOrderRequest(BaseModel):
+    symbol: str
+    quantity: int
+    primary_price: float
+    secondary_price: float
+    order_side: str = "SELL"
+    primary_type: str = "LIMIT"
+    secondary_type: str = "STOP"
+
+
+class BracketOrderRequest(BaseModel):
+    symbol: str
+    quantity: int
+    entry_price: float
+    take_profit_price: float
+    stop_loss_price: float
+    order_side: str = "BUY"
+
+
+class ScaleOrderRequest(BaseModel):
+    symbol: str
+    total_quantity: int
+    entry_prices: List[float]
+    order_side: str = "BUY"
+
+
+class ModifyOcoRequest(BaseModel):
+    new_primary_price: Optional[float] = None
+    new_secondary_price: Optional[float] = None
+
+
+@app.post("/api/orders/oco")
+async def create_oco_order(user_id: str, req: OcoOrderRequest):
+    """Create OCO (One Cancels Other) order"""
+    from . import advanced_trading
+    try:
+        order = advanced_trading.create_oco_order(
+            user_id=user_id,
+            symbol=req.symbol,
+            quantity=req.quantity,
+            primary_price=req.primary_price,
+            secondary_price=req.secondary_price,
+            order_side=req.order_side,
+            primary_type=req.primary_type,
+            secondary_type=req.secondary_type,
+        )
+        return order
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/orders/bracket")
+async def create_bracket_order(user_id: str, req: BracketOrderRequest):
+    """Create bracket order"""
+    from . import advanced_trading
+    try:
+        order = advanced_trading.create_bracket_order(
+            user_id=user_id,
+            symbol=req.symbol,
+            quantity=req.quantity,
+            entry_price=req.entry_price,
+            take_profit_price=req.take_profit_price,
+            stop_loss_price=req.stop_loss_price,
+            order_side=req.order_side,
+        )
+        return order
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/orders/scale")
+async def create_scale_order(user_id: str, req: ScaleOrderRequest):
+    """Create scale in/out order"""
+    from . import advanced_trading
+    try:
+        order = advanced_trading.create_scale_order(
+            user_id=user_id,
+            symbol=req.symbol,
+            total_quantity=req.total_quantity,
+            entry_prices=req.entry_prices,
+            order_side=req.order_side,
+        )
+        return order
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/orders/advanced/{user_id}")
+async def get_advanced_orders(user_id: str):
+    """Get all active advanced orders (OCO, Bracket, Scale, Conditional)"""
+    from . import advanced_trading
+    try:
+        orders = advanced_trading.get_active_advanced_orders(user_id)
+        return orders
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/advanced-orders/{user_id}")
+async def get_advanced_orders_alias(user_id: str):
+    """Get all active advanced orders (frontend-compatible alias)"""
+    from . import advanced_trading
+    try:
+        orders = advanced_trading.get_active_advanced_orders(user_id)
+        return orders
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.delete("/api/orders/oco/{oco_id}")
+async def cancel_oco_order(oco_id: str):
+    """Cancel OCO order"""
+    from . import advanced_trading
+    try:
+        success = advanced_trading.cancel_oco_order(oco_id)
+        return {"success": success, "oco_id": oco_id}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.delete("/api/orders/bracket/{bracket_id}")
+async def cancel_bracket_order(bracket_id: str):
+    """Cancel bracket order"""
+    from . import advanced_trading
+    try:
+        success = advanced_trading.cancel_bracket_order(bracket_id)
+        return {"success": success, "bracket_id": bracket_id}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.delete("/api/orders/conditional/{condition_id}")
+async def cancel_conditional_order_adv(condition_id: str):
+    """Cancel conditional order"""
+    from . import advanced_trading
+    try:
+        success = advanced_trading.cancel_conditional_order(condition_id)
+        return {"success": success, "condition_id": condition_id}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.put("/api/orders/oco/{oco_id}")
+async def modify_oco_order(oco_id: str, req: ModifyOcoRequest):
+    """Modify OCO order prices"""
+    from . import advanced_trading
+    try:
+        success = advanced_trading.modify_oco_order(
+            oco_id=oco_id,
+            new_primary_price=req.new_primary_price,
+            new_secondary_price=req.new_secondary_price,
+        )
+        return {"success": success, "oco_id": oco_id}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/orders/recommendations/{symbol}")
+async def get_order_recommendations(
+    symbol: str,
+    current_price: float = 100.0,
+    volatility: float = 0.02,
+    risk_tolerance: str = "MEDIUM",
+):
+    """Get advanced order strategy recommendations"""
+    from . import advanced_trading
+    try:
+        recs = advanced_trading.get_order_recommendations(
+            symbol=symbol,
+            current_price=current_price,
+            volatility=volatility,
+            risk_tolerance=risk_tolerance,
+        )
+        return recs
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============= Phase E: Market Data Expansion =============
+
+@app.get("/api/market/crypto")
+async def get_crypto_prices(symbols: Optional[str] = None):
+    """Get cryptocurrency prices"""
+    from . import market_data
+    try:
+        symbol_list = symbols.split(",") if symbols else None
+        prices = market_data.get_crypto_prices(symbol_list)
+        return prices
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/market/crypto/chart/{symbol}")
+async def get_crypto_chart(symbol: str, timeframe: str = "1d", limit: int = 100):
+    """Get cryptocurrency chart data"""
+    from . import market_data
+    try:
+        candles = market_data.get_crypto_chart(symbol.upper(), timeframe, limit)
+        return {"symbol": symbol.upper(), "timeframe": timeframe, "candles": candles}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/market/crypto/portfolio/{user_id}")
+async def get_crypto_portfolio(user_id: str):
+    """Get user cryptocurrency portfolio"""
+    from . import market_data
+    try:
+        portfolio = market_data.get_crypto_portfolios(user_id)
+        return portfolio
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/market/futures")
+async def get_futures(asset_class: str = "INDEX"):
+    """Get futures contracts"""
+    from . import market_data
+    try:
+        contracts = market_data.get_futures_contracts(asset_class.upper())
+        return contracts
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/market/futures/chain/{symbol}")
+async def get_futures_chain(symbol: str):
+    """Get futures chain (by expiration month)"""
+    from . import market_data
+    try:
+        chain = market_data.get_futures_chain(symbol.upper())
+        return {"symbol": symbol.upper(), "chain": chain}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/market/forex")
+async def get_forex_rates(pairs: Optional[str] = None):
+    """Get forex exchange rates"""
+    from . import market_data
+    try:
+        pair_list = pairs.split(",") if pairs else None
+        rates = market_data.get_forex_rates(pair_list)
+        return rates
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/market/forex/chart/{pair}")
+async def get_forex_chart(pair: str, timeframe: str = "1h", limit: int = 100):
+    """Get forex chart data"""
+    from . import market_data
+    try:
+        candles = market_data.get_forex_chart(pair.upper(), timeframe, limit)
+        return {"pair": pair.upper(), "timeframe": timeframe, "candles": candles}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/market/bonds")
+async def get_bonds():
+    """Get bond data"""
+    from . import market_data
+    try:
+        bonds = market_data.get_bond_data()
+        return bonds
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============= Phase G: Data Export & Reports =============
+
+@app.get("/api/export/portfolio/csv/{user_id}")
+async def export_portfolio_csv(user_id: str):
+    """Export portfolio to CSV"""
+    from . import data_export
+    try:
+        csv_content = data_export.export_portfolio_to_csv(user_id)
+        return StreamingResponse(
+            iter([csv_content]),
+            media_type="text/csv",
+            headers={
+                "Content-Disposition": f"attachment; filename=portfolio_{user_id}.csv"
+            },
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/export/portfolio/excel/{user_id}")
+async def export_portfolio_excel(user_id: str):
+    """Export portfolio to Excel"""
+    from . import data_export
+    try:
+        excel_bytes = data_export.export_portfolio_to_excel(user_id)
+        return StreamingResponse(
+            iter([excel_bytes]),
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            headers={
+                "Content-Disposition": f"attachment; filename=portfolio_{user_id}.xlsx"
+            },
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/export/portfolio/pdf/{user_id}")
+async def export_portfolio_pdf(user_id: str):
+    """Export portfolio to PDF"""
+    from . import data_export
+    try:
+        pdf_bytes = data_export.export_portfolio_to_pdf(user_id)
+        return StreamingResponse(
+            iter([pdf_bytes]),
+            media_type="application/pdf",
+            headers={
+                "Content-Disposition": f"attachment; filename=portfolio_{user_id}.pdf"
+            },
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/export/alerts/csv/{user_id}")
+async def export_alerts_csv(user_id: str):
+    """Export alerts to CSV"""
+    from . import data_export
+    try:
+        csv_content = data_export.export_alerts_to_csv(user_id)
+        return StreamingResponse(
+            iter([csv_content]),
+            media_type="text/csv",
+            headers={
+                "Content-Disposition": f"attachment; filename=alerts_{user_id}.csv"
+            },
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/export/transactions/csv/{user_id}")
+async def export_transactions_csv(user_id: str, start_date: Optional[str] = None):
+    """Export transaction history to CSV"""
+    from . import data_export
+    try:
+        csv_content = data_export.export_transactions_to_csv(user_id, start_date)
+        return StreamingResponse(
+            iter([csv_content]),
+            media_type="text/csv",
+            headers={
+                "Content-Disposition": f"attachment; filename=transactions_{user_id}.csv"
+            },
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/export/summary/{user_id}")
+async def get_export_summary(user_id: str):
+    """Export summary (list of available formats)"""
+    from . import data_export
+    try:
+        summary = data_export.create_export_summary(user_id)
+        return summary
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/report/monthly/{user_id}")
+async def get_monthly_report(user_id: str, year: int = 2026, month: int = 4):
+    """Monthly report"""
+    from . import data_export
+    try:
+        report = data_export.generate_monthly_report(user_id, year, month)
+        return report
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/report/annual/{user_id}")
+async def get_annual_report(user_id: str, year: int = 2026):
+    """Annual report"""
+    from . import data_export
+    try:
+        report = data_export.generate_annual_report(user_id, year)
+        return report
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/report/json/{user_id}")
+async def export_report_json(user_id: str, year: int = 2026):
+    """Export annual report to JSON"""
+    from . import data_export
+    try:
+        report = data_export.generate_annual_report(user_id, year)
+        json_content = data_export.export_report_to_json(report)
+        return StreamingResponse(
+            iter([json_content]),
+            media_type="application/json",
+            headers={
+                "Content-Disposition": f"attachment; filename=report_{user_id}_{year}.json"
+            },
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============= Unified Export Endpoints (Frontend-compatible) =============
+
+from fastapi import Header as FastAPIHeader
+
+def _extract_user_id_from_token(authorization: Optional[str]) -> str:
+    """Extract user_id from Bearer token"""
+    if authorization and authorization.startswith("Bearer "):
+        token = authorization[7:]
+        parts = token.split(".")
+        if len(parts) >= 1 and parts[0]:
+            return parts[0]
+    return "guest"
+
+
+@app.get("/api/export/portfolio")
+async def unified_export_portfolio(
+    format: str = "csv",
+    authorization: Optional[str] = FastAPIHeader(default=None),
+):
+    """Export portfolio data (unified endpoint supporting csv/excel/pdf)"""
+    from . import data_export
+    try:
+        # user_id fallback to guest for unauthenticated requests
+        user_id = _extract_user_id_from_token(authorization)
+
+        if format == "csv":
+            content = data_export.export_portfolio_to_csv(user_id)
+            return StreamingResponse(
+                iter([content]),
+                media_type="text/csv",
+                headers={"Content-Disposition": f"attachment; filename=portfolio.csv"},
+            )
+        elif format == "excel":
+            content = data_export.export_portfolio_to_excel(user_id)
+            return StreamingResponse(
+                iter([content]),
+                media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                headers={"Content-Disposition": f"attachment; filename=portfolio.xlsx"},
+            )
+        elif format == "pdf":
+            content = data_export.export_portfolio_to_pdf(user_id)
+            return StreamingResponse(
+                iter([content]),
+                media_type="application/pdf",
+                headers={"Content-Disposition": f"attachment; filename=portfolio.pdf"},
+            )
+        else:
+            raise HTTPException(status_code=400, detail=f"Unsupported format: {format}")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/export/alerts")
+async def unified_export_alerts(
+    format: str = "csv",
+    authorization: Optional[str] = FastAPIHeader(default=None),
+):
+    """Export alerts list (unified endpoint)"""
+    from . import data_export
+    try:
+        user_id = _extract_user_id_from_token(authorization)
+        content = data_export.export_alerts_to_csv(user_id)
+        ext = "xlsx" if format == "excel" else "csv"
+        return StreamingResponse(
+            iter([content]),
+            media_type="text/csv",
+            headers={"Content-Disposition": f"attachment; filename=alerts.{ext}"},
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/export/transactions")
+async def unified_export_transactions(
+    format: str = "csv",
+    start_date: Optional[str] = None,
+    authorization: Optional[str] = FastAPIHeader(default=None),
+):
+    """Export transaction history (unified endpoint)"""
+    from . import data_export
+    try:
+        user_id = _extract_user_id_from_token(authorization)
+        content = data_export.export_transactions_to_csv(user_id, start_date)
+        return StreamingResponse(
+            iter([content]),
+            media_type="text/csv",
+            headers={"Content-Disposition": f"attachment; filename=transactions.csv"},
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/export/backtest")
+async def unified_export_backtest(
+    format: str = "csv",
+    symbol: str = "SPY",
+    strategy: str = "RSI",
+    authorization: Optional[str] = FastAPIHeader(default=None),
+):
+    """Export backtest results (unified endpoint)"""
+    from . import data_export
+    try:
+        content = data_export.export_backtest_results_to_csv(symbol, strategy, {})
+        return StreamingResponse(
+            iter([content]),
+            media_type="text/csv",
+            headers={"Content-Disposition": f"attachment; filename=backtest_{symbol}.csv"},
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/export/monthly-report")
+async def unified_export_monthly_report(
+    year: int = 2026,
+    month: int = 4,
+    format: str = "json",
+    authorization: Optional[str] = FastAPIHeader(default=None),
+):
+    """Export monthly report (unified endpoint)"""
+    from . import data_export
+    try:
+        user_id = _extract_user_id_from_token(authorization)
+        report = data_export.generate_monthly_report(user_id, year, month)
+
+        if format == "json":
+            content = data_export.export_report_to_json(report)
+            return StreamingResponse(
+                iter([content]),
+                media_type="application/json",
+                headers={"Content-Disposition": f"attachment; filename=monthly_{year}_{month:02d}.json"},
+            )
+        elif format == "csv":
+            lines = [f"{k},{v}" for k, v in report.items() if not isinstance(v, (list, dict))]
+            content = "\n".join(lines)
+            return StreamingResponse(
+                iter([content]),
+                media_type="text/csv",
+                headers={"Content-Disposition": f"attachment; filename=monthly_{year}_{month:02d}.csv"},
+            )
+        else:
+            return report
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/export/annual-report")
+async def unified_export_annual_report(
+    year: int = 2026,
+    format: str = "json",
+    authorization: Optional[str] = FastAPIHeader(default=None),
+):
+    """Export annual report (unified endpoint)"""
+    from . import data_export
+    try:
+        user_id = _extract_user_id_from_token(authorization)
+        report = data_export.generate_annual_report(user_id, year)
+
+        if format == "json":
+            content = data_export.export_report_to_json(report)
+            return StreamingResponse(
+                iter([content]),
+                media_type="application/json",
+                headers={"Content-Disposition": f"attachment; filename=annual_{year}.json"},
+            )
+        elif format == "csv":
+            lines = [f"{k},{v}" for k, v in report.items() if not isinstance(v, (list, dict))]
+            content = "\n".join(lines)
+            return StreamingResponse(
+                iter([content]),
+                media_type="text/csv",
+                headers={"Content-Disposition": f"attachment; filename=annual_{year}.csv"},
+            )
+        else:
+            return report
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============= Options Analysis Endpoints =============
+
+@app.get("/api/options/chain/{symbol}")
+async def get_options_chain(symbol: str, expiration_date: Optional[str] = None):
+    """Options chain with Greeks (frontend-compatible format)"""
+    from . import options_analysis
+    try:
+        raw = options_analysis.get_options_chain(symbol.upper(), expiration_date)
+        expirations = options_analysis.get_available_expirations(symbol.upper())
+        expiration_dates = [e["date"] for e in expirations]
+
+        # Transform to frontend-expected flat chain format
+        calls_map = {c["strike"]: c for c in raw["calls"]}
+        puts_map = {p["strike"]: p for p in raw["puts"]}
+        all_strikes = sorted(set(list(calls_map.keys()) + list(puts_map.keys())))
+
+        chain = []
+        for strike in all_strikes:
+            call = calls_map.get(strike, {})
+            put = puts_map.get(strike, {})
+            chain.append({
+                "strikePrice": strike,
+                "callBid": call.get("bid", 0),
+                "callAsk": call.get("ask", 0),
+                "callIv": call.get("implied_volatility", 0),
+                "callDelta": call.get("delta", 0),
+                "putBid": put.get("bid", 0),
+                "putAsk": put.get("ask", 0),
+                "putIv": put.get("implied_volatility", 0),
+                "putDelta": put.get("delta", 0),
+            })
+
+        return {
+            "data": {
+                "symbol": symbol.upper(),
+                "price": raw["current_price"],
+                "expirationDates": expiration_dates,
+                "iv": 25.0,
+                "ivPercentile": 45,
+                "chain": chain,
+            }
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+class GreeksRequest(BaseModel):
+    symbol: str
+    strike: float
+    expiration_date: str
+    option_type: str = "CALL"
+    current_price: float = 450.0
+    risk_free_rate: float = 0.05
+    volatility: float = 0.25
+
+
+@app.post("/api/options/greeks")
+async def calculate_greeks(req: GreeksRequest):
+    """Calculate option Greeks"""
+    from . import options_analysis
+    try:
+        result = options_analysis.calculate_option_Greeks(
+            symbol=req.symbol,
+            strike=req.strike,
+            expiration_date=req.expiration_date,
+            option_type=req.option_type,
+            current_price=req.current_price,
+            risk_free_rate=req.risk_free_rate,
+            volatility=req.volatility,
+        )
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/options/strategies")
+async def get_option_strategies():
+    """Get available option strategies"""
+    from . import options_analysis
+    try:
+        strategies = options_analysis.get_option_strategies()
+        return {"strategies": strategies}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/options/expirations/{symbol}")
+async def get_option_expirations(symbol: str):
+    """Get available expiration dates for a symbol"""
+    from . import options_analysis
+    try:
+        expirations = options_analysis.get_available_expirations(symbol.upper())
+        return {"symbol": symbol.upper(), "expirations": expirations}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============= Phase E: Additional Market Data Endpoints =============
+
+@app.get("/api/market/bonds/analysis/{symbol}")
+async def get_bond_analysis(symbol: str):
+    """Bond analysis (duration, convexity)"""
+    from . import market_data
+    try:
+        analysis = market_data.get_bond_analysis(symbol.upper())
+        return analysis
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/market/bonds/yield-curve")
+async def get_yield_curve():
+    """Yield curve data"""
+    from . import market_data
+    try:
+        curve = market_data.get_yield_curve()
+        return curve
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/market/bonds/price-calculator")
+async def calculate_bond_price(
+    coupon_rate: float = 0.045,
+    yield_rate: float = 0.04,
+    years_to_maturity: float = 10.0,
+    face_value: float = 100.0,
+):
+    """Bond price calculator"""
+    from . import market_data
+    try:
+        price = market_data.calculate_bond_price(
+            coupon_rate, yield_rate, years_to_maturity, face_value
+        )
+        return {
+            "price": price,
+            "coupon_rate": coupon_rate,
+            "yield_rate": yield_rate,
+            "years_to_maturity": years_to_maturity,
+            "face_value": face_value,
+        }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

@@ -1,4 +1,4 @@
-"""Error Handling - 에러 처리 및 응답 포맷팅"""
+"""Error Handling - Error handling and response formatting"""
 
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
@@ -9,11 +9,11 @@ logger = logging.getLogger(__name__)
 
 
 def setup_error_handlers(app: FastAPI):
-    """FastAPI 에러 핸들러 설정"""
+    """Configure FastAPI error handlers"""
 
     @app.exception_handler(RequestValidationError)
     async def validation_exception_handler(request: Request, exc: RequestValidationError):
-        """입력 검증 에러 핸들러"""
+        """Input validation error handler"""
         errors = []
         for error in exc.errors():
             field = ".".join(str(x) for x in error["loc"][1:])
@@ -31,7 +31,7 @@ def setup_error_handlers(app: FastAPI):
 
     @app.exception_handler(ValueError)
     async def value_error_handler(request: Request, exc: ValueError):
-        """값 에러 핸들러"""
+        """Value error handler"""
         logger.error(f"ValueError: {str(exc)}")
         return JSONResponse(
             status_code=400,
@@ -44,7 +44,7 @@ def setup_error_handlers(app: FastAPI):
 
     @app.exception_handler(Exception)
     async def general_exception_handler(request: Request, exc: Exception):
-        """일반 에러 핸들러"""
+        """General exception handler"""
         logger.error(f"Unhandled exception: {type(exc).__name__}: {str(exc)}")
         return JSONResponse(
             status_code=500,
@@ -57,7 +57,7 @@ def setup_error_handlers(app: FastAPI):
 
 
 class APIResponse:
-    """표준화된 API 응답"""
+    """Standardized API response"""
 
     @staticmethod
     def success(data=None, message="성공"):

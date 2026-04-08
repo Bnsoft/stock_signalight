@@ -1,4 +1,4 @@
-"""Settings Routes - 사용자 설정 API 라우트"""
+"""Settings Routes - User settings API routes"""
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from typing import Optional
@@ -8,7 +8,7 @@ router = APIRouter(prefix="/api", tags=["settings"])
 
 @router.put("/users/profile")
 async def update_user_profile(user_id: str = Query(...), data: dict = {}):
-    """사용자 프로필 업데이트"""
+    """Update user profile"""
     try:
         from . import store
 
@@ -43,7 +43,7 @@ async def update_user_profile(user_id: str = Query(...), data: dict = {}):
 
 @router.put("/settings/notifications")
 async def update_notification_settings(user_id: str = Query(...), data: dict = {}):
-    """알림 설정 업데이트"""
+    """Update notification settings"""
     try:
         from . import store
         import json
@@ -68,7 +68,7 @@ async def update_notification_settings(user_id: str = Query(...), data: dict = {
 
 @router.get("/settings/notifications")
 async def get_notification_settings(user_id: str = Query(...)):
-    """알림 설정 조회"""
+    """Retrieve notification settings"""
     try:
         from . import store
         import json
@@ -102,7 +102,7 @@ async def get_notification_settings(user_id: str = Query(...)):
 
 @router.put("/settings/preferences")
 async def update_preferences(user_id: str = Query(...), data: dict = {}):
-    """사용자 환경 설정 업데이트"""
+    """Update user preferences"""
     try:
         from . import store
         import json
@@ -134,7 +134,7 @@ async def update_preferences(user_id: str = Query(...), data: dict = {}):
 
 @router.get("/settings/preferences")
 async def get_preferences(user_id: str = Query(...)):
-    """사용자 환경 설정 조회"""
+    """Retrieve user preferences"""
     try:
         from . import store
 
@@ -164,7 +164,7 @@ async def get_preferences(user_id: str = Query(...)):
 
 @router.post("/settings/password")
 async def change_password(user_id: str = Query(...), data: dict = {}):
-    """비밀번호 변경"""
+    """Change user password"""
     try:
         from . import store
         import bcrypt
@@ -208,7 +208,7 @@ async def change_password(user_id: str = Query(...), data: dict = {}):
 
 @router.get("/settings/data-export")
 async def export_user_data(user_id: str = Query(...)):
-    """사용자 데이터 내보내기"""
+    """Export user data"""
     try:
         from . import store
         import json
@@ -249,7 +249,7 @@ async def export_user_data(user_id: str = Query(...)):
 
 @router.delete("/account")
 async def delete_account(user_id: str = Query(...)):
-    """계정 삭제"""
+    """Delete user account"""
     try:
         from . import store
 

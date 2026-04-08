@@ -1,4 +1,4 @@
-"""Advanced Trading - 고급 거래"""
+"""Advanced Trading - Advanced Order Management"""
 
 from datetime import datetime, timedelta
 from typing import List, Dict, Optional
@@ -8,7 +8,7 @@ import json
 
 
 class OrderType(Enum):
-    """주문 타입"""
+    """Order type"""
     MARKET = "MARKET"
     LIMIT = "LIMIT"
     STOP = "STOP"
@@ -20,7 +20,7 @@ class OrderType(Enum):
 
 
 class OrderStatus(Enum):
-    """주문 상태"""
+    """Order status"""
     PENDING = "PENDING"
     ACTIVE = "ACTIVE"
     PARTIALLY_FILLED = "PARTIALLY_FILLED"
@@ -40,15 +40,15 @@ def create_oco_order(
     primary_type: str = "LIMIT",
     secondary_type: str = "STOP",
 ) -> Dict:
-    """OCO (One Cancels Other) 주문 생성
+    """Create OCO (One Cancels Other) order
 
-    한 주문이 체결되면 다른 주문은 자동으로 취소됨
-    예: 매수 후 이익 실현(LIMIT)이나 손절(STOP) 중 먼저 되는 것 체결
+    When one order is filled, the other is automatically cancelled.
+    Example: After a buy, whichever comes first — take profit (LIMIT) or stop loss (STOP) — is filled.
     """
     oco_id = f"OCO_{user_id}_{symbol}_{int(datetime.utcnow().timestamp())}"
 
     with store._connect() as conn:
-        # Primary order (예: 이익 실현)
+        # Primary order (e.g. take profit)
         conn.execute(
             """INSERT INTO orders
                (user_id, symbol, quantity, order_type, order_side, price, status,
@@ -68,7 +68,7 @@ def create_oco_order(
             ),
         )
 
-        # Secondary order (예: 손절)
+        # Secondary order (e.g. stop loss)
         conn.execute(
             """INSERT INTO orders
                (user_id, symbol, quantity, order_type, order_side, price, status,
@@ -120,10 +120,10 @@ def create_conditional_order(
     order_side: str = "BUY",
     order_type: str = "LIMIT",
 ) -> Dict:
-    """조건부 주문 생성
+    """Create conditional order
 
-    특정 조건이 만족되면 주문 실행
-    예: SPY가 450 이상이면 AAPL 매수
+    Executes an order when a specific condition is met.
+    Example: Buy AAPL when SPY is above 450.
     """
     condition_id = f"COND_{user_id}_{symbol}_{int(datetime.utcnow().timestamp())}"
 
@@ -172,10 +172,10 @@ def create_bracket_order(
     stop_loss_price: float,
     order_side: str = "BUY",
 ) -> Dict:
-    """괄호 주문 (Bracket Order)
+    """Bracket Order
 
-    진입, 이익실현, 손절을 한 세트로 관리
-    진입 후 이익실현이나 손절 중 하나 체결되면 나머지 자동 취소
+    Manages entry, take profit, and stop loss as a single set.
+    After entry, whichever of take profit or stop loss fills first automatically cancels the other.
     """
     bracket_id = f"BRACKET_{user_id}_{symbol}_{int(datetime.utcnow().timestamp())}"
 
@@ -271,10 +271,10 @@ def create_scale_order(
     entry_prices: List[float],
     order_side: str = "BUY",
 ) -> Dict:
-    """스케일 인/아웃 주문
+    """Scale in/out order
 
-    여러 단계에서 주문 실행
-    예: 500주를 4단계로 나누어 매수
+    Executes orders across multiple price levels.
+    Example: Buy 500 shares in 4 separate tranches.
     """
     scale_id = f"SCALE_{user_id}_{symbol}_{int(datetime.utcnow().timestamp())}"
     qty_per_order = total_quantity // len(entry_prices)
@@ -328,7 +328,7 @@ def create_scale_order(
 
 
 def get_active_advanced_orders(user_id: str) -> Dict:
-    """활성 고급 주문 조회"""
+    """Get active advanced orders"""
     with store._connect() as conn:
         # OCO orders
         oco_orders = conn.execute(
@@ -422,7 +422,7 @@ def get_active_advanced_orders(user_id: str) -> Dict:
 
 
 def cancel_oco_order(oco_id: str) -> bool:
-    """OCO 주문 취소"""
+    """Cancel OCO order"""
     with store._connect() as conn:
         conn.execute(
             "UPDATE orders SET status = ? WHERE oco_id = ?",
@@ -434,7 +434,7 @@ def cancel_oco_order(oco_id: str) -> bool:
 
 
 def cancel_conditional_order(condition_id: str) -> bool:
-    """조건부 주문 취소"""
+    """Cancel conditional order"""
     with store._connect() as conn:
         conn.execute(
             "UPDATE conditional_orders SET status = ? WHERE condition_id = ?",
@@ -446,7 +446,7 @@ def cancel_conditional_order(condition_id: str) -> bool:
 
 
 def cancel_bracket_order(bracket_id: str) -> bool:
-    """괄호 주문 취소"""
+    """Cancel bracket order"""
     with store._connect() as conn:
         conn.execute(
             "UPDATE orders SET status = ? WHERE bracket_id = ?",
@@ -462,7 +462,7 @@ def modify_oco_order(
     new_primary_price: Optional[float] = None,
     new_secondary_price: Optional[float] = None,
 ) -> bool:
-    """OCO 주문 수정"""
+    """Modify OCO order"""
     with store._connect() as conn:
         if new_primary_price:
             conn.execute(
@@ -471,7 +471,7 @@ def modify_oco_order(
             )
 
         if new_secondary_price:
-            # 두 번째 주문 수정 (OFFSET 1)
+            # Modify the second order (OFFSET 1)
             conn.execute(
                 """UPDATE orders SET price = ?
                    WHERE oco_id = ? AND rowid !=
@@ -490,8 +490,8 @@ def get_order_recommendations(
     volatility: float,
     risk_tolerance: str = "MEDIUM",
 ) -> Dict:
-    """고급 주문 전략 추천"""
-    # 변동성 기반 가격 계산
+    """Recommend advanced order strategies"""
+    # Calculate price range based on volatility
     price_range = current_price * volatility
 
     if risk_tolerance == "CONSERVATIVE":

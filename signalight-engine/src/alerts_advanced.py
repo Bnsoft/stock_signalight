@@ -1,4 +1,4 @@
-"""Advanced Alert System - 고급 알람 설정"""
+"""Advanced Alert System - Advanced Alert Configuration"""
 
 from datetime import datetime, timedelta
 from typing import List, Dict, Optional
@@ -16,7 +16,7 @@ def create_price_alert(
     notify_methods: List[str] = None,  # ["EMAIL", "PUSH", "SMS", "TELEGRAM"]
     repeat_alert: bool = True
 ) -> Dict:
-    """가격 기반 알람 생성"""
+    """Create a price-based alert"""
     if notify_methods is None:
         notify_methods = ["PUSH"]
 
@@ -50,7 +50,7 @@ def create_indicator_alert(
     timeframe: str = "1D",  # "5M", "15M", "1H", "4H", "1D", "1W"
     notify_methods: List[str] = None
 ) -> Dict:
-    """지표 기반 알람 생성"""
+    """Create an indicator-based alert"""
     if notify_methods is None:
         notify_methods = ["PUSH"]
 
@@ -81,10 +81,10 @@ def create_volume_alert(
     symbol: str,
     alert_type: str,  # "UNUSUAL_VOLUME", "VOLUME_ABOVE", "VOLUME_BELOW"
     volume_threshold: float,
-    multiplier: float = 2.0,  # 평균의 몇배?
+    multiplier: float = 2.0,  # How many times the average?
     notify_methods: List[str] = None
 ) -> Dict:
-    """거래량 기반 알람 생성"""
+    """Create a volume-based alert"""
     if notify_methods is None:
         notify_methods = ["PUSH"]
 
@@ -115,7 +115,7 @@ def create_portfolio_alert(
     threshold: float,
     notify_methods: List[str] = None
 ) -> Dict:
-    """포트폴리오 기반 알람 생성"""
+    """Create a portfolio-based alert"""
     if notify_methods is None:
         notify_methods = ["PUSH", "EMAIL"]
 
@@ -145,7 +145,7 @@ def create_news_alert(
     sentiment: Optional[str] = None,  # "POSITIVE", "NEGATIVE", "NEUTRAL" or None for all
     notify_methods: List[str] = None
 ) -> Dict:
-    """뉴스 기반 알람 생성"""
+    """Create a news-based alert"""
     if notify_methods is None:
         notify_methods = ["PUSH", "EMAIL"]
 
@@ -172,13 +172,13 @@ def create_news_alert(
 def create_time_based_alert(
     user_id: str,
     symbol: str,
-    alert_time: str,  # "09:30", "16:00" (시장 시간)
+    alert_time: str,  # "09:30", "16:00" (market hours)
     message: str,
     recurring: str = "DAILY",  # "ONCE", "DAILY", "WEEKLY", "MONTHLY"
     days_of_week: Optional[List[str]] = None,  # ["MON", "TUE", ...] for WEEKLY
     notify_methods: List[str] = None
 ) -> Dict:
-    """시간 기반 알람 생성"""
+    """Create a time-based alert"""
     if notify_methods is None:
         notify_methods = ["PUSH"]
 
@@ -208,10 +208,10 @@ def create_composite_alert(
     user_id: str,
     symbol: str,
     conditions: List[Dict],  # [{"type": "RSI", "value": 30}, {"type": "PRICE", "value": 150}]
-    logic: str = "AND",  # "AND" 또는 "OR"
+    logic: str = "AND",  # "AND" or "OR"
     notify_methods: List[str] = None
 ) -> Dict:
-    """복합 조건 알람 생성"""
+    """Create a composite condition alert"""
     if notify_methods is None:
         notify_methods = ["PUSH"]
 
@@ -239,7 +239,7 @@ def create_composite_alert(
 # ============= Alert Management =============
 
 def get_all_alerts(user_id: str) -> Dict:
-    """사용자의 모든 알람 조회"""
+    """Retrieve all alerts for a user"""
     with store._connect() as conn:
         price_alerts = conn.execute(
             """SELECT id, symbol, alert_type, trigger_price, is_active FROM price_alerts
@@ -307,7 +307,7 @@ def get_all_alerts(user_id: str) -> Dict:
 
 
 def toggle_alert(alert_id: int, alert_type: str, is_active: bool) -> bool:
-    """알람 활성화/비활성화"""
+    """Enable or disable an alert"""
     table_map = {
         "PRICE": "price_alerts",
         "INDICATOR": "indicator_alerts",
@@ -333,7 +333,7 @@ def toggle_alert(alert_id: int, alert_type: str, is_active: bool) -> bool:
 
 
 def delete_alert(alert_id: int, alert_type: str) -> bool:
-    """알람 삭제"""
+    """Delete an alert"""
     table_map = {
         "PRICE": "price_alerts",
         "INDICATOR": "indicator_alerts",
@@ -356,7 +356,7 @@ def delete_alert(alert_id: int, alert_type: str) -> bool:
 
 
 def get_alert_history(user_id: str, limit: int = 50) -> List[Dict]:
-    """알람 발생 이력"""
+    """Alert trigger history"""
     with store._connect() as conn:
         history = conn.execute(
             """SELECT id, alert_type, symbol, trigger_price, notify_method, triggered_at
@@ -389,7 +389,7 @@ def configure_notification_settings(
     discord: bool = False,
     quiet_hours: Optional[str] = None  # "23:00-09:00"
 ) -> Dict:
-    """알림 설정 구성"""
+    """Configure notification settings"""
     with store._connect() as conn:
         conn.execute(
             """INSERT OR REPLACE INTO notification_settings

@@ -1,4 +1,4 @@
-"""Portfolio Analysis - 포트폴리오 분석"""
+"""Portfolio Analysis - Portfolio Analyzer"""
 
 import math
 from datetime import datetime, timedelta
@@ -11,20 +11,20 @@ def calculate_portfolio_metrics(
     positions: List[Dict],  # [{"symbol": "SPY", "quantity": 100, "current_price": 450}]
     risk_free_rate: float = 0.05,
 ) -> Dict:
-    """포트폴리오 기본 지표 계산"""
+    """Calculate basic portfolio metrics"""
 
     total_value = sum(p["quantity"] * p["current_price"] for p in positions)
     if total_value == 0:
         return {}
 
-    # 포트폴리오 가중치 계산
+    # Calculate portfolio weights
     weights = {}
     for pos in positions:
         symbol = pos["symbol"]
         position_value = pos["quantity"] * pos["current_price"]
         weights[symbol] = position_value / total_value
 
-    # 수익률 계산
+    # Calculate returns
     total_return = sum(
         (p["current_price"] - p.get("entry_price", p["current_price"]))
         * p["quantity"]
@@ -32,7 +32,7 @@ def calculate_portfolio_metrics(
     )
     return_percent = (total_return / total_value * 100) if total_value > 0 else 0
 
-    # 포트폴리오 위험도 (가정된 표준편차)
+    # Portfolio risk (assumed standard deviation)
     portfolio_volatility = calculate_portfolio_volatility(positions)
 
     # Sharpe Ratio
@@ -51,8 +51,8 @@ def calculate_portfolio_metrics(
 
 
 def calculate_portfolio_volatility(positions: List[Dict]) -> float:
-    """포트폴리오 변동성 계산 (단순화된 버전)"""
-    # 개별 자산 변동성의 가중평균 (상관관계 무시)
+    """Calculate portfolio volatility (simplified version)"""
+    # Weighted average of individual asset volatilities (correlation ignored)
     if not positions:
         return 0
 
@@ -64,20 +64,20 @@ def calculate_portfolio_volatility(positions: List[Dict]) -> float:
     for pos in positions:
         position_value = pos["quantity"] * pos["current_price"]
         weight = position_value / total_value
-        # 시뮬레이션: 각 종목의 연간 변동성 (실제로는 historical data에서 계산)
-        annual_volatility = 0.20 + (hash(pos["symbol"]) % 10) * 0.02  # 20-38% 범위
+        # Simulation: annual volatility per symbol (in production, calculated from historical data)
+        annual_volatility = 0.20 + (hash(pos["symbol"]) % 10) * 0.02  # 20-38% range
         weighted_vol += weight * annual_volatility
 
     return weighted_vol
 
 
 def get_asset_allocation(positions: List[Dict]) -> Dict:
-    """자산 배분 분석"""
+    """Analyze asset allocation"""
     total_value = sum(p["quantity"] * p["current_price"] for p in positions)
     if total_value == 0:
         return {"allocation": []}
 
-    # 자산 클래스 분류 (시뮬레이션)
+    # Asset class classification (simulated)
     asset_classes = {
         "Stocks": {"value": 0, "symbols": []},
         "ETFs": {"value": 0, "symbols": []},
@@ -85,21 +85,21 @@ def get_asset_allocation(positions: List[Dict]) -> Dict:
         "Crypto": {"value": 0, "symbols": []},
     }
 
-    # 심볼 기반 분류
+    # Symbol-based classification
     for pos in positions:
         position_value = pos["quantity"] * pos["current_price"]
         symbol = pos["symbol"]
 
-        if symbol.endswith("D") or symbol.endswith("Q"):  # 채권 관련
+        if symbol.endswith("D") or symbol.endswith("Q"):  # bond-related
             asset_classes["Bonds"]["value"] += position_value
             asset_classes["Bonds"]["symbols"].append(symbol)
-        elif symbol.startswith("B"):  # 암호화폐 관련
+        elif symbol.startswith("B"):  # crypto-related
             asset_classes["Crypto"]["value"] += position_value
             asset_classes["Crypto"]["symbols"].append(symbol)
         elif len(symbol) > 3 or symbol.endswith("F"):  # ETF
             asset_classes["ETFs"]["value"] += position_value
             asset_classes["ETFs"]["symbols"].append(symbol)
-        else:  # 주식
+        else:  # stocks
             asset_classes["Stocks"]["value"] += position_value
             asset_classes["Stocks"]["symbols"].append(symbol)
 
@@ -120,12 +120,12 @@ def get_asset_allocation(positions: List[Dict]) -> Dict:
 
 
 def get_sector_analysis(positions: List[Dict]) -> Dict:
-    """섹터 분석"""
+    """Analyze sector exposure"""
     total_value = sum(p["quantity"] * p["current_price"] for p in positions)
     if total_value == 0:
         return {"sectors": []}
 
-    # 섹터 분류 (시뮬레이션)
+    # Sector classification (simulated)
     sector_map = {
         "AAPL": "Technology",
         "MSFT": "Technology",
@@ -175,21 +175,21 @@ def get_sector_analysis(positions: List[Dict]) -> Dict:
 
 
 def calculate_correlation_matrix(symbols: List[str]) -> Dict:
-    """상관관계 매트릭스 계산"""
-    # 시뮬레이션 데이터
+    """Calculate a correlation matrix"""
+    # Simulated data
     correlations = {}
 
     for i, sym1 in enumerate(symbols):
         for j, sym2 in enumerate(symbols):
             if i <= j:
-                # 같은 심볼은 1.0
+                # Same symbol: 1.0
                 if sym1 == sym2:
                     corr = 1.0
-                # 같은 섹터면 높은 상관관계
+                # Same sector: high correlation
                 elif (sym1 in ["AAPL", "MSFT", "NVDA"] and sym2 in ["AAPL", "MSFT", "NVDA"]) or \
                      (sym1 in ["SPY", "QQQ"] and sym2 in ["SPY", "QQQ"]):
                     corr = 0.7 + (hash(f"{sym1}{sym2}") % 10) * 0.02
-                # 다른 섹터면 낮은 상관관계
+                # Different sector: low correlation
                 else:
                     corr = 0.3 + (hash(f"{sym1}{sym2}") % 10) * 0.05
 
@@ -202,7 +202,7 @@ def get_performance_attribution(
     positions: List[Dict],
     returns: Dict,  # {"AAPL": 0.05, "MSFT": 0.03, ...}
 ) -> Dict:
-    """성과 기여도 분석"""
+    """Analyze performance attribution"""
     total_value = sum(p["quantity"] * p["current_price"] for p in positions)
     if total_value == 0:
         return {"attribution": []}
@@ -215,7 +215,7 @@ def get_performance_attribution(
         symbol = pos["symbol"]
         return_pct = returns.get(symbol, 0.0)
 
-        # 기여도 = 가중치 × 수익률
+        # Contribution = weight × return
         contribution = weight * return_pct
 
         attribution.append({
@@ -239,24 +239,24 @@ def calculate_efficient_frontier(
     symbols: List[str],
     num_portfolios: int = 100,
 ) -> Dict:
-    """효율적 투자선 (Efficient Frontier) 계산"""
+    """Calculate the Efficient Frontier"""
     import random
 
     portfolios = []
 
     for _ in range(num_portfolios):
-        # 랜덤 가중치 생성
+        # Generate random weights
         weights = [random.random() for _ in symbols]
         total_weight = sum(weights)
         weights = [w / total_weight for w in weights]
 
-        # 포트폴리오 수익률 계산 (시뮬레이션)
+        # Calculate portfolio return (simulated)
         expected_returns = [0.05 + (hash(sym) % 10) * 0.01 for sym in symbols]  # 5-14%
         portfolio_return = sum(w * r for w, r in zip(weights, expected_returns))
 
-        # 포트폴리오 위험도 계산 (시뮬레이션)
+        # Calculate portfolio risk (simulated)
         individual_volatilities = [0.15 + (hash(sym) % 10) * 0.02 for sym in symbols]  # 15-35%
-        portfolio_volatility = sum(w * v for w, v in zip(weights, individual_volatilities)) * 0.8  # 상관관계 가정
+        portfolio_volatility = sum(w * v for w, v in zip(weights, individual_volatilities)) * 0.8  # assumed correlation
 
         # Sharpe Ratio
         risk_free_rate = 0.05
@@ -269,13 +269,13 @@ def calculate_efficient_frontier(
             "weights": {sym: round(w, 4) for sym, w in zip(symbols, weights)},
         })
 
-    # 최고 Sharpe Ratio 포트폴리오 찾기
+    # Find the portfolio with the highest Sharpe Ratio
     optimal_portfolio = max(portfolios, key=lambda x: x["sharpe_ratio"])
 
-    # 최소 위험 포트폴리오 찾기
+    # Find the minimum-risk portfolio
     min_risk_portfolio = min(portfolios, key=lambda x: x["volatility_percent"])
 
-    # 최대 수익 포트폴리오 찾기
+    # Find the maximum-return portfolio
     max_return_portfolio = max(portfolios, key=lambda x: x["return_percent"])
 
     return {
@@ -287,8 +287,8 @@ def calculate_efficient_frontier(
 
 
 def get_dividend_analysis(positions: List[Dict]) -> Dict:
-    """배당금 분석"""
-    # 시뮬레이션 배당률
+    """Analyze dividends"""
+    # Simulated dividend yields
     dividend_yields = {
         "AAPL": 0.005,
         "MSFT": 0.009,
@@ -333,18 +333,18 @@ def get_dividend_analysis(positions: List[Dict]) -> Dict:
 
 
 def get_risk_metrics(positions: List[Dict]) -> Dict:
-    """위험 지표"""
+    """Calculate risk metrics"""
     if not positions:
         return {}
 
     total_value = sum(p["quantity"] * p["current_price"] for p in positions)
 
-    # Value at Risk (VaR) 95% - 1일
-    daily_volatility = 0.015  # 1.5% daily 가정
+    # Value at Risk (VaR) 95% - 1 day
+    daily_volatility = 0.015  # assumed 1.5% daily
     var_95_1day = total_value * 1.645 * daily_volatility
 
-    # Maximum Drawdown 시뮬레이션
-    max_drawdown = total_value * 0.25  # 최대 손실 25% 가정
+    # Maximum Drawdown (simulated)
+    max_drawdown = total_value * 0.25  # assumed 25% maximum loss
 
     # Concentration Risk
     largest_position = max((p["quantity"] * p["current_price"]) / total_value for p in positions) if positions else 0
@@ -364,7 +364,7 @@ def get_rebalance_recommendations(
     positions: List[Dict],
     target_allocation: Dict,  # {"Stocks": 0.60, "Bonds": 0.40}
 ) -> Dict:
-    """리밸런싱 권고"""
+    """Generate rebalancing recommendations"""
     total_value = sum(p["quantity"] * p["current_price"] for p in positions)
 
     current_allocation = get_asset_allocation(positions)
@@ -377,7 +377,7 @@ def get_rebalance_recommendations(
         difference = target_pct - current_pct
         dollar_difference = difference * total_value
 
-        if abs(difference) > 0.05:  # 5% 이상 차이나면 권고
+        if abs(difference) > 0.05:  # recommend if deviation exceeds 5%
             recommendations.append({
                 "asset_class": asset_class,
                 "target_percent": round(target_pct * 100, 2),

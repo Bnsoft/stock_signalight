@@ -1,4 +1,4 @@
-"""News & Events Data - 뉴스 및 이벤트 데이터"""
+"""News & Events Data - News and Events Data"""
 
 from datetime import datetime, timedelta
 from typing import List, Dict, Optional
@@ -10,8 +10,8 @@ def get_latest_news(
     limit: int = 20,
     sentiment: Optional[str] = None
 ) -> List[Dict]:
-    """최신 뉴스 조회"""
-    # 시뮬레이션 뉴스 데이터
+    """Retrieve the latest news"""
+    # Simulated news data
     news_items = [
         {
             "id": 1,
@@ -75,7 +75,7 @@ def get_latest_news(
         },
     ]
 
-    # 필터링
+    # Filtering
     if symbol:
         news_items = [n for n in news_items if n["symbol"].upper() == symbol.upper()]
 
@@ -90,7 +90,7 @@ def get_earnings_calendar(
     end_date: Optional[str] = None,
     limit: int = 50
 ) -> List[Dict]:
-    """실적 발표 일정 조회"""
+    """Retrieve the earnings release calendar"""
     earnings = [
         {
             "symbol": "AAPL",
@@ -162,7 +162,7 @@ def get_economic_calendar(
     end_date: Optional[str] = None,
     limit: int = 30
 ) -> List[Dict]:
-    """경제 캘린더 조회"""
+    """Retrieve the economic calendar"""
     events = [
         {
             "id": 1,
@@ -236,7 +236,7 @@ def get_economic_calendar(
 
 
 def get_ipo_calendar(limit: int = 20) -> List[Dict]:
-    """IPO 캘린더 조회"""
+    """Retrieve the IPO calendar"""
     return [
         {
             "id": 1,
@@ -264,7 +264,7 @@ def get_ipo_calendar(limit: int = 20) -> List[Dict]:
 
 
 def get_company_announcements(symbol: str) -> List[Dict]:
-    """회사 공시 조회"""
+    """Retrieve company announcements"""
     announcements = [
         {
             "id": 1,
@@ -304,8 +304,8 @@ def get_company_announcements(symbol: str) -> List[Dict]:
 
 
 def analyze_sentiment(text: str) -> Dict:
-    """뉴스 감정 분석"""
-    # 간단한 감정 분석 (실제로는 NLP 모델 사용)
+    """Analyze news sentiment"""
+    # Simple sentiment analysis (in production, an NLP model would be used)
     positive_words = ["beat", "surge", "rally", "gain", "jump", "soar", "excellent", "strong"]
     negative_words = ["miss", "decline", "fall", "loss", "plunge", "weak", "poor", "warning"]
 
@@ -332,7 +332,7 @@ def analyze_sentiment(text: str) -> Dict:
 
 
 def get_sector_news(sector: str, limit: int = 10) -> List[Dict]:
-    """섹터별 뉴스 조회"""
+    """Retrieve news by sector"""
     sector_symbols = {
         "Technology": ["AAPL", "MSFT", "GOOGL", "NVIDIA", "META"],
         "Healthcare": ["JNJ", "PFE", "ABBV", "MRK", "LLY"],
@@ -351,7 +351,7 @@ def get_sector_news(sector: str, limit: int = 10) -> List[Dict]:
 
 
 def track_earnings_surprises(limit: int = 20) -> List[Dict]:
-    """실적 서프라이즈 추적"""
+    """Track earnings surprises"""
     surprises = [
         {
             "symbol": "AAPL",

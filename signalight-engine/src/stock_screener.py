@@ -1,4 +1,4 @@
-"""Stock Screener - 주식 스크리닝"""
+"""Stock Screener"""
 
 from datetime import datetime, timedelta
 from typing import List, Dict, Optional
@@ -6,7 +6,7 @@ from . import store
 
 
 def screen_by_price(min_price: float = 0, max_price: float = 10000) -> List[Dict]:
-    """가격 범위로 스크리닝"""
+    """Screen stocks by price range"""
     with store._connect() as conn:
         stocks = conn.execute(
             """SELECT symbol, current_price, change_percent, volume
@@ -28,7 +28,7 @@ def screen_by_price(min_price: float = 0, max_price: float = 10000) -> List[Dict
 
 
 def screen_by_volume(min_volume: float) -> List[Dict]:
-    """거래량으로 스크리닝"""
+    """Screen stocks by volume"""
     with store._connect() as conn:
         stocks = conn.execute(
             """SELECT symbol, current_price, volume, change_percent
@@ -50,8 +50,8 @@ def screen_by_volume(min_volume: float) -> List[Dict]:
 
 
 def screen_by_rsi(min_rsi: float = 0, max_rsi: float = 100) -> List[Dict]:
-    """RSI로 스크리닝 (과매도/과매수)"""
-    # 과매도: RSI < 30, 과매수: RSI > 70
+    """Screen stocks by RSI (oversold/overbought)"""
+    # Oversold: RSI < 30, Overbought: RSI > 70
 
     rsi_signals = {
         "OVERSOLD": [],
@@ -87,7 +87,7 @@ def screen_by_rsi(min_rsi: float = 0, max_rsi: float = 100) -> List[Dict]:
 
 
 def screen_by_macd() -> List[Dict]:
-    """MACD 교차로 스크리닝"""
+    """Screen stocks by MACD crossover"""
     signals = {
         "BULLISH_CROSS": [],
         "BEARISH_CROSS": [],
@@ -95,7 +95,7 @@ def screen_by_macd() -> List[Dict]:
         "STRONG_DOWNTREND": []
     }
 
-    # 시뮬레이션 데이터
+    # Simulation data
     symbols_data = {
         "QQQ": {"signal": "BULLISH_CROSS", "strength": 85},
         "SPY": {"signal": "STRONG_UPTREND", "strength": 72},
@@ -116,7 +116,7 @@ def screen_by_macd() -> List[Dict]:
 
 
 def screen_gainers() -> List[Dict]:
-    """상승 종목"""
+    """Top gaining stocks"""
     with store._connect() as conn:
         gainers = conn.execute(
             """SELECT symbol, current_price, change_percent, volume
@@ -139,7 +139,7 @@ def screen_gainers() -> List[Dict]:
 
 
 def screen_losers() -> List[Dict]:
-    """하락 종목"""
+    """Top losing stocks"""
     with store._connect() as conn:
         losers = conn.execute(
             """SELECT symbol, current_price, change_percent, volume
@@ -162,15 +162,15 @@ def screen_losers() -> List[Dict]:
 
 
 def screen_by_moving_average() -> List[Dict]:
-    """이동평균 교차 스크리닝"""
+    """Screen stocks by moving average crossover"""
     ma_signals = {
-        "PRICE_ABOVE_MA": [],      # 가격이 MA 위
-        "PRICE_BELOW_MA": [],      # 가격이 MA 아래
-        "MA_GOLDEN_CROSS": [],     # MA 골든크로스 (50일 > 200일)
-        "MA_DEATH_CROSS": []       # MA 데드크로스 (50일 < 200일)
+        "PRICE_ABOVE_MA": [],      # Price above MA
+        "PRICE_BELOW_MA": [],      # Price below MA
+        "MA_GOLDEN_CROSS": [],     # MA golden cross (50-day > 200-day)
+        "MA_DEATH_CROSS": []       # MA death cross (50-day < 200-day)
     }
 
-    # 시뮬레이션
+    # Simulation
     symbols_data = {
         "QQQ": {"signal": "MA_GOLDEN_CROSS", "sma50": 595, "sma200": 580},
         "SPY": {"signal": "PRICE_ABOVE_MA", "sma50": 445, "sma200": 435},
@@ -188,15 +188,15 @@ def screen_by_moving_average() -> List[Dict]:
 
 
 def screen_by_bollinger_bands() -> List[Dict]:
-    """볼린저 밴드 스크리닝"""
+    """Screen stocks by Bollinger Bands"""
     bb_signals = {
-        "UPPER_BAND_TOUCH": [],    # 상단 터치 (매도 신호)
-        "LOWER_BAND_TOUCH": [],    # 하단 터치 (매수 신호)
-        "SQUEEZE": [],              # 밴드 축소 (변동성 낮음)
-        "BREAKOUT": []              # 밴드 이탈 (변동성 높음)
+        "UPPER_BAND_TOUCH": [],    # Upper band touch (sell signal)
+        "LOWER_BAND_TOUCH": [],    # Lower band touch (buy signal)
+        "SQUEEZE": [],              # Band contraction (low volatility)
+        "BREAKOUT": []              # Band breakout (high volatility)
     }
 
-    # 시뮬레이션
+    # Simulation
     symbols_data = {
         "QQQ": {"signal": "UPPER_BAND_TOUCH", "upper": 610, "lower": 580},
         "SPY": {"signal": "SQUEEZE", "upper": 450, "lower": 440},
@@ -219,7 +219,7 @@ def create_custom_screener(
     criteria: List[Dict],  # [{"type": "RSI", "min": 30, "max": 50}, ...]
     description: Optional[str] = None
 ) -> Dict:
-    """커스텀 스크리너 저장"""
+    """Save a custom screener"""
     import json
     with store._connect() as conn:
         conn.execute(
@@ -245,7 +245,7 @@ def create_custom_screener(
 
 
 def run_custom_screener(screener_id: int) -> List[Dict]:
-    """커스텀 스크리너 실행"""
+    """Run a custom screener"""
     with store._connect() as conn:
         screener = conn.execute(
             "SELECT criteria FROM custom_screeners WHERE id = ?",
@@ -255,7 +255,7 @@ def run_custom_screener(screener_id: int) -> List[Dict]:
     if not screener:
         return []
 
-    # 실행 로직은 복잡하므로 간단하게
+    # Execution logic is complex; simplified here
     return [
         {"symbol": "QQQ", "matches": 5, "score": 85},
         {"symbol": "SPY", "matches": 4, "score": 72},
@@ -264,7 +264,7 @@ def run_custom_screener(screener_id: int) -> List[Dict]:
 
 
 def get_market_stats() -> Dict:
-    """시장 통계"""
+    """Market statistics"""
     return {
         "market_open": "09:30 EST",
         "market_close": "16:00 EST",

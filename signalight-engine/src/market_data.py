@@ -1,4 +1,4 @@
-"""Market Data - 시장 데이터 (암호화폐, 선물, 외환, 채권)"""
+"""Market Data - Cryptocurrency, Futures, Forex, Bonds"""
 
 from datetime import datetime, timedelta
 from typing import List, Dict, Optional
@@ -6,10 +6,10 @@ from . import store
 import random
 
 
-# ============= Cryptocurrency (암호화폐) =============
+# ============= Cryptocurrency =============
 
 def get_crypto_prices(symbols: Optional[List[str]] = None) -> List[Dict]:
-    """암호화폐 가격 조회"""
+    """Get cryptocurrency prices"""
     crypto_data = {
         "BTC": {"name": "Bitcoin", "price": 65234.50, "change": 2.45},
         "ETH": {"name": "Ethereum", "price": 3456.78, "change": 3.21},
@@ -39,7 +39,7 @@ def get_crypto_prices(symbols: Optional[List[str]] = None) -> List[Dict]:
 
 
 def get_crypto_chart(symbol: str, timeframe: str = "1d", limit: int = 100) -> List[Dict]:
-    """암호화폐 차트 데이터"""
+    """Get cryptocurrency chart data"""
     base_price = {"BTC": 65000, "ETH": 3450, "BNB": 610, "SOL": 200}.get(symbol, 100)
 
     candles = []
@@ -66,7 +66,7 @@ def get_crypto_chart(symbol: str, timeframe: str = "1d", limit: int = 100) -> Li
 
 
 def get_crypto_portfolios(user_id: str) -> Dict:
-    """사용자 암호화폐 포트폴리오"""
+    """Get user cryptocurrency portfolio"""
     with store._connect() as conn:
         positions = conn.execute(
             """SELECT symbol, quantity, entry_price
@@ -110,10 +110,10 @@ def get_crypto_portfolios(user_id: str) -> Dict:
     }
 
 
-# ============= Futures (선물) =============
+# ============= Futures =============
 
 def get_futures_contracts(asset_class: str = "INDEX") -> List[Dict]:
-    """선물 계약 조회"""
+    """Get futures contracts"""
     futures_data = {
         "INDEX": [
             {"symbol": "ES", "name": "E-mini S&P 500", "price": 5123.45, "change": 0.89},
@@ -154,7 +154,7 @@ def get_futures_contracts(asset_class: str = "INDEX") -> List[Dict]:
 
 
 def get_futures_chain(symbol: str) -> List[Dict]:
-    """선물 체인 (만료 월별)"""
+    """Get futures chain (by expiration month)"""
     months = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"]
     current_year = datetime.utcnow().year
     base_price = 5123.45 if symbol == "ES" else 16234.56 if symbol == "NQ" else 40123.45
@@ -166,7 +166,7 @@ def get_futures_chain(symbol: str) -> List[Dict]:
         year = current_year if month_idx >= datetime.utcnow().month else current_year + 1
 
         contract_symbol = f"{symbol}{month}{str(year)[-2:]}"
-        price = base_price * (1 + i * 0.0001)  # 약간의 contango/backwardation
+        price = base_price * (1 + i * 0.0001)  # slight contango/backwardation
 
         chain.append({
             "symbol": contract_symbol,
@@ -182,10 +182,10 @@ def get_futures_chain(symbol: str) -> List[Dict]:
     return chain
 
 
-# ============= Forex (외환) =============
+# ============= Forex =============
 
 def get_forex_rates(pairs: Optional[List[str]] = None) -> List[Dict]:
-    """외환 환율 조회"""
+    """Get forex exchange rates"""
     forex_data = {
         "EURUSD": {"rate": 1.0856, "change": 0.12},
         "GBPUSD": {"rate": 1.2647, "change": 0.34},
@@ -216,7 +216,7 @@ def get_forex_rates(pairs: Optional[List[str]] = None) -> List[Dict]:
 
 
 def get_forex_chart(pair: str, timeframe: str = "1h", limit: int = 100) -> List[Dict]:
-    """외환 차트 데이터"""
+    """Get forex chart data"""
     base_rate = {"EURUSD": 1.0856, "GBPUSD": 1.2647, "USDJPY": 149.45}.get(pair, 1.0)
 
     candles = []
@@ -248,10 +248,10 @@ def get_forex_chart(pair: str, timeframe: str = "1h", limit: int = 100) -> List[
     return candles
 
 
-# ============= Bonds (채권) =============
+# ============= Bonds =============
 
 def get_bond_data() -> List[Dict]:
-    """채권 데이터"""
+    """Get bond data"""
     bonds = [
         {
             "symbol": "UST2Y",
@@ -324,12 +324,12 @@ def calculate_bond_price(
     years_to_maturity: float,
     face_value: float = 100,
 ) -> float:
-    """채권 가격 계산
+    """Calculate bond price
 
-    PV = 쿠폰지급액/[(1+수익률)^t] + 액면가/[(1+수익률)^n]
+    PV = coupon payment / [(1 + yield)^t] + face value / [(1 + yield)^n]
     """
     annual_coupon = coupon_rate * face_value
-    periods = int(years_to_maturity * 2)  # 반기별
+    periods = int(years_to_maturity * 2)  # semi-annual
     semi_yield = yield_rate / 2
     semi_coupon = annual_coupon / 2
 
@@ -343,7 +343,7 @@ def calculate_bond_price(
 
 
 def get_bond_analysis(symbol: str) -> Dict:
-    """채권 분석"""
+    """Analyze bond"""
     bonds_info = {
         "UST10Y": {"yield": 4.12, "duration": 8.2, "convexity": 75.3},
         "UST30Y": {"yield": 4.34, "duration": 18.5, "convexity": 450.2},
@@ -353,8 +353,8 @@ def get_bond_analysis(symbol: str) -> Dict:
 
     info = bonds_info.get(symbol, {"yield": 4.0, "duration": 5.0, "convexity": 50.0})
 
-    # 금리 변화에 따른 가격 변화
-    yield_change = -0.01  # -1% 금리 하락
+    # Price change due to interest rate movement
+    yield_change = -0.01  # -1% rate decline
 
     duration_effect = info["duration"] * yield_change * 100
     convexity_effect = 0.5 * info["convexity"] * (yield_change ** 2) * 100
@@ -376,7 +376,7 @@ def get_bond_analysis(symbol: str) -> Dict:
 
 
 def get_yield_curve() -> Dict:
-    """수익률 곡선 (Yield Curve)"""
+    """Get yield curve"""
     maturities = ["2Y", "5Y", "10Y", "30Y"]
     yields = [4.23, 3.98, 4.12, 4.34]
 

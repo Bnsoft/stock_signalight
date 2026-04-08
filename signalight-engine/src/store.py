@@ -241,7 +241,7 @@ def init_db() -> None:
             CREATE INDEX IF NOT EXISTS idx_community_posts_user ON community_posts(user_id);
             CREATE INDEX IF NOT EXISTS idx_leaderboard_month ON leaderboard(month);
 
-            -- Phase 11: AI & 머신러닝
+            -- Phase 11: AI & Machine Learning
             CREATE TABLE IF NOT EXISTS signal_confidence (
                 id                 INTEGER PRIMARY KEY AUTOINCREMENT,
                 signal_id          INTEGER NOT NULL,
@@ -285,7 +285,7 @@ def init_db() -> None:
                 FOREIGN KEY (user_id) REFERENCES users(id)
             );
 
-            -- Phase 12: 뉴스 & 경제
+            -- Phase 12: News & Economy
             CREATE TABLE IF NOT EXISTS news_signals (
                 id                 INTEGER PRIMARY KEY AUTOINCREMENT,
                 symbol             TEXT,
@@ -310,7 +310,7 @@ def init_db() -> None:
                 created_at         DATETIME DEFAULT CURRENT_TIMESTAMP
             );
 
-            -- Phase 13: 자동화
+            -- Phase 13: Automation
             CREATE TABLE IF NOT EXISTS auto_trades (
                 id                 INTEGER PRIMARY KEY AUTOINCREMENT,
                 user_id            TEXT,
@@ -336,7 +336,7 @@ def init_db() -> None:
                 FOREIGN KEY (user_id) REFERENCES users(id)
             );
 
-            -- Phase 14: 교육
+            -- Phase 14: Education
             CREATE TABLE IF NOT EXISTS courses (
                 id                 INTEGER PRIMARY KEY AUTOINCREMENT,
                 title              TEXT,
@@ -358,7 +358,7 @@ def init_db() -> None:
                 FOREIGN KEY (course_id) REFERENCES courses(id)
             );
 
-            -- Phase 16: 커뮤니티
+            -- Phase 16: Community
             CREATE TABLE IF NOT EXISTS community_posts (
                 id                 INTEGER PRIMARY KEY AUTOINCREMENT,
                 user_id            TEXT,
@@ -388,7 +388,7 @@ def init_db() -> None:
                 FOREIGN KEY (following_id) REFERENCES users(id)
             );
 
-            -- Phase 18: 리스크 관리
+            -- Phase 18: Risk Management
             CREATE TABLE IF NOT EXISTS risk_limits (
                 id                 INTEGER PRIMARY KEY AUTOINCREMENT,
                 user_id            TEXT UNIQUE,
@@ -410,7 +410,7 @@ def init_db() -> None:
                 FOREIGN KEY (user_id) REFERENCES users(id)
             );
 
-            -- Phase 19: 브로커 통합
+            -- Phase 19: Broker Integration
             CREATE TABLE IF NOT EXISTS broker_accounts (
                 id                 INTEGER PRIMARY KEY AUTOINCREMENT,
                 user_id            TEXT,
@@ -422,7 +422,7 @@ def init_db() -> None:
                 FOREIGN KEY (user_id) REFERENCES users(id)
             );
 
-            -- Phase 20: 게임화
+            -- Phase 20: Gamification
             CREATE TABLE IF NOT EXISTS user_badges (
                 id                 INTEGER PRIMARY KEY AUTOINCREMENT,
                 user_id            TEXT,
@@ -442,7 +442,7 @@ def init_db() -> None:
                 FOREIGN KEY (user_id) REFERENCES users(id)
             );
 
-            -- Phase 22: 수익화
+            -- Phase 22: Monetization
             CREATE TABLE IF NOT EXISTS referrals (
                 id                 INTEGER PRIMARY KEY AUTOINCREMENT,
                 referrer_id        TEXT,
@@ -463,7 +463,7 @@ def init_db() -> None:
                 FOREIGN KEY (user_id) REFERENCES users(id)
             );
 
-            -- Phase 24: 국제화
+            -- Phase 24: Internationalization
             CREATE TABLE IF NOT EXISTS crypto_assets (
                 id                 INTEGER PRIMARY KEY AUTOINCREMENT,
                 user_id            TEXT,
@@ -485,7 +485,7 @@ def init_db() -> None:
                 FOREIGN KEY (user_id) REFERENCES users(id)
             );
 
-            -- Phase 25: 특이 기능
+            -- Phase 25: Special Features
             CREATE TABLE IF NOT EXISTS mirror_trades (
                 id                 INTEGER PRIMARY KEY AUTOINCREMENT,
                 user_id            TEXT,

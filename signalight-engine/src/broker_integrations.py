@@ -1,4 +1,4 @@
-"""Broker Integrations - 브로커 통합 (Interactive Brokers, Alpaca, TD Ameritrade)"""
+"""Broker Integrations - Broker connections (Interactive Brokers, Alpaca, TD Ameritrade)"""
 
 from datetime import datetime, timedelta
 from typing import List, Dict, Optional, Tuple
@@ -8,15 +8,15 @@ import json
 
 
 class BrokerType(Enum):
-    """브로커 타입"""
+    """Broker type"""
     IB = "INTERACTIVE_BROKERS"  # Interactive Brokers
     ALPACA = "ALPACA"  # Alpaca
     TD = "TD_AMERITRADE"  # TD Ameritrade
-    PAPER = "PAPER_TRADING"  # 페이퍼 트레이딩
+    PAPER = "PAPER_TRADING"  # Paper trading
 
 
 class OrderStatus(Enum):
-    """주문 상태"""
+    """Order status"""
     PENDING = "PENDING"
     SUBMITTED = "SUBMITTED"
     ACCEPTED = "ACCEPTED"
@@ -34,7 +34,7 @@ def connect_broker(
     api_secret: str,
     account_id: Optional[str] = None,
 ) -> Dict:
-    """브로커 연결"""
+    """Connect to broker"""
     connection_id = f"CONN_{user_id}_{broker_type}_{int(datetime.utcnow().timestamp())}"
 
     with store._connect() as conn:
@@ -47,7 +47,7 @@ def connect_broker(
                 user_id,
                 broker_type,
                 connection_id,
-                api_key,  # 실제로는 암호화해서 저장해야 함
+                api_key,  # In production this should be stored encrypted
                 api_secret,
                 account_id,
                 1,
@@ -65,7 +65,7 @@ def connect_broker(
 
 
 def get_broker_account(user_id: str, broker_type: str) -> Dict:
-    """브로커 계정 정보 조회"""
+    """Retrieve broker account information"""
     if broker_type == "INTERACTIVE_BROKERS":
         return {
             "broker": "Interactive Brokers",
@@ -118,10 +118,10 @@ def place_live_order(
     order_side: str = "BUY",
     time_in_force: str = "DAY",
 ) -> Dict:
-    """실제 거래소에 주문 발주"""
+    """Submit an order to the live exchange"""
     broker_order_id = f"{broker_type}_{symbol}_{int(datetime.utcnow().timestamp() * 1000)}"
 
-    # 브로커별 실제 API 호출 (시뮬레이션)
+    # Broker-specific live API call (simulation)
     broker_response = {
         "order_id": broker_order_id,
         "symbol": symbol,
@@ -137,7 +137,7 @@ def place_live_order(
         "average_filled_price": 0,
     }
 
-    # DB에 저장
+    # Save to DB
     with store._connect() as conn:
         conn.execute(
             """INSERT INTO broker_orders
@@ -165,7 +165,7 @@ def place_live_order(
 
 
 def cancel_live_order(user_id: str, broker_type: str, broker_order_id: str) -> bool:
-    """실제 거래소 주문 취소"""
+    """Cancel a live exchange order"""
     with store._connect() as conn:
         conn.execute(
             """UPDATE broker_orders SET status = ?
@@ -178,8 +178,8 @@ def cancel_live_order(user_id: str, broker_type: str, broker_order_id: str) -> b
 
 
 def get_live_positions(user_id: str, broker_type: str) -> List[Dict]:
-    """실제 거래소 포지션 조회"""
-    # 시뮬레이션 데이터
+    """Retrieve live exchange positions"""
+    # Simulation data
     positions = [
         {
             "symbol": "SPY",
@@ -217,7 +217,7 @@ def get_live_positions(user_id: str, broker_type: str) -> List[Dict]:
 
 
 def get_live_orders(user_id: str, broker_type: str, status: Optional[str] = None) -> List[Dict]:
-    """실제 거래소 주문 조회"""
+    """Retrieve live exchange orders"""
     with store._connect() as conn:
         query = """SELECT broker_order_id, symbol, quantity, order_type, order_side,
                           price, status, created_at, filled_quantity, average_filled_price
@@ -255,7 +255,7 @@ def get_order_history(
     end_date: Optional[str] = None,
     limit: int = 100,
 ) -> List[Dict]:
-    """주문 이력 조회"""
+    """Retrieve order history"""
     with store._connect() as conn:
         query = """SELECT broker_order_id, symbol, quantity, order_type, order_side,
                           price, status, created_at, filled_quantity, average_filled_price
@@ -294,7 +294,7 @@ def get_order_history(
 
 
 def get_live_trades(user_id: str, broker_type: str, limit: int = 50) -> List[Dict]:
-    """체결 거래 조회"""
+    """Retrieve filled trades"""
     trades = [
         {
             "trade_id": "T001",
@@ -335,13 +335,13 @@ def get_live_trades(user_id: str, broker_type: str, limit: int = 50) -> List[Dic
 
 
 def sync_broker_data(user_id: str, broker_type: str) -> Dict:
-    """브로커 데이터 동기화"""
+    """Synchronize broker data"""
     account = get_broker_account(user_id, broker_type)
     positions = get_live_positions(user_id, broker_type)
     orders = get_live_orders(user_id, broker_type)
     trades = get_live_trades(user_id, broker_type)
 
-    # DB에 동기화
+    # Sync to DB
     with store._connect() as conn:
         conn.execute(
             """INSERT OR REPLACE INTO broker_sync_history
@@ -371,8 +371,8 @@ def sync_broker_data(user_id: str, broker_type: str) -> Dict:
 
 
 def get_broker_market_data(broker_type: str, symbol: str) -> Dict:
-    """브로커에서 시장 데이터 조회"""
-    # 각 브로커의 API를 통해 실시간 데이터 조회
+    """Retrieve market data from broker"""
+    # Fetch real-time data via each broker's API
     return {
         "symbol": symbol,
         "broker": broker_type,
@@ -387,7 +387,7 @@ def get_broker_market_data(broker_type: str, symbol: str) -> Dict:
 
 
 def calculate_portfolio_performance(user_id: str, broker_type: str) -> Dict:
-    """포트폴리오 성과 계산"""
+    """Calculate portfolio performance"""
     positions = get_live_positions(user_id, broker_type)
     account = get_broker_account(user_id, broker_type)
 
@@ -409,7 +409,7 @@ def calculate_portfolio_performance(user_id: str, broker_type: str) -> Dict:
 
 
 def get_broker_commissions(broker_type: str) -> Dict:
-    """브로커 수수료 정보"""
+    """Broker commission information"""
     commissions = {
         "INTERACTIVE_BROKERS": {
             "stocks": 0.001,
@@ -439,7 +439,7 @@ def validate_broker_order(
     price: Optional[float],
     available_buying_power: float,
 ) -> Tuple[bool, str]:
-    """주문 유효성 검사"""
+    """Validate order parameters"""
     if quantity <= 0:
         return False, "수량은 0보다 커야 합니다"
 

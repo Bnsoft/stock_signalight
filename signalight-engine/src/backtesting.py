@@ -1,4 +1,4 @@
-"""Backtesting Engine - 백테스팅"""
+"""Backtesting Engine"""
 
 from datetime import datetime, timedelta
 from typing import List, Dict, Optional
@@ -14,15 +14,15 @@ def run_strategy_backtest(
     risk_percent: float = 2.0,
     strategy_params: Dict = None
 ) -> Dict:
-    """전략 백테스트 실행"""
+    """Run a strategy backtest"""
 
-    # 시뮬레이션 결과
+    # Simulation results
     total_trades = 45
     winning_trades = 30
     losing_trades = 15
     win_rate = (winning_trades / total_trades) * 100
 
-    final_value = initial_capital * 1.35  # 35% 수익
+    final_value = initial_capital * 1.35  # 35% return
     gross_profit = final_value - initial_capital
     max_drawdown = -12.5
 
@@ -51,13 +51,13 @@ def run_strategy_backtest(
 
 
 def compare_strategies(symbol: str, strategies: List[str]) -> Dict:
-    """여러 전략 비교"""
+    """Compare multiple strategies"""
     comparison = []
 
     for strategy in strategies:
         comparison.append({
             "strategy": strategy,
-            "total_return": 15.5 + len(strategy) * 0.5,  # 시뮬레이션
+            "total_return": 15.5 + len(strategy) * 0.5,  # simulation
             "win_rate": 62 + len(strategy) * 0.5,
             "max_drawdown": -10,
             "sharpe_ratio": 1.6
@@ -77,12 +77,12 @@ def backtest_with_monte_carlo(
     historical_trades: List[Dict],
     num_simulations: int = 1000
 ) -> Dict:
-    """몬테카를로 시뮬레이션 백테스트"""
+    """Monte Carlo simulation backtest"""
 
-    # 시뮬레이션: 1000회 반복
+    # Simulation: 1000 iterations
     results = []
     for i in range(num_simulations):
-        # 각 시뮬레이션마다 다른 결과
+        # Different result for each simulation run
         return_pct = 15 + (i % 30) - 15  # -15% to +30%
         results.append(return_pct)
 
@@ -107,11 +107,11 @@ def parameter_optimization(
     symbol: str,
     param_ranges: Dict  # {"sma_short": [10, 20, 30], "sma_long": [50, 100, 200]}
 ) -> Dict:
-    """파라미터 최적화"""
+    """Parameter optimization"""
     optimal_params = {}
     best_return = 0
 
-    # 시뮬레이션
+    # Simulation
     return {
         "strategy_name": strategy_name,
         "symbol": symbol,
@@ -135,7 +135,7 @@ def backtest_portfolio(
     end_date: str,
     initial_capital: float = 100000
 ) -> Dict:
-    """포트폴리오 백테스트"""
+    """Portfolio backtest"""
     return {
         "user_id": user_id,
         "symbols": portfolio_symbols,
@@ -156,7 +156,7 @@ def backtest_portfolio(
 
 
 def get_backtest_results(symbol: str, limit: int = 10) -> List[Dict]:
-    """백테스트 결과 조회"""
+    """Retrieve backtest results"""
     return [
         {
             "id": 1,
@@ -185,7 +185,7 @@ def save_backtest(
     symbol: str,
     backtest_result: Dict
 ) -> Dict:
-    """백테스트 결과 저장"""
+    """Save a backtest result"""
     import json
     with store._connect() as conn:
         conn.execute(

@@ -1,4 +1,4 @@
-"""Data Export Routes - 데이터 내보내기 API 라우트"""
+"""Data Export Routes - Data export API routes"""
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
@@ -10,7 +10,7 @@ router = APIRouter(prefix="/api/export", tags=["export"])
 
 @router.get("/portfolio")
 async def export_portfolio(user_id: str = Query(...), format: str = Query("csv")):
-    """포트폴리오 내보내기"""
+    """Export portfolio data"""
     try:
         if format == "csv":
             content = data_export.export_portfolio_to_csv(user_id)
@@ -41,7 +41,7 @@ async def export_portfolio(user_id: str = Query(...), format: str = Query("csv")
 
 @router.get("/backtest")
 async def export_backtest(user_id: str = Query(...), format: str = Query("csv")):
-    """백테스트 결과 내보내기"""
+    """Export backtest results"""
     try:
         if format == "csv":
             content = data_export.export_backtest_results_to_csv(
@@ -100,7 +100,7 @@ async def export_backtest(user_id: str = Query(...), format: str = Query("csv"))
 
 @router.get("/alerts")
 async def export_alerts(user_id: str = Query(...), format: str = Query("csv")):
-    """알람 내보내기"""
+    """Export alerts data"""
     try:
         if format == "csv":
             content = data_export.export_alerts_to_csv(user_id)
@@ -124,7 +124,7 @@ async def export_alerts(user_id: str = Query(...), format: str = Query("csv")):
 
 @router.get("/transactions")
 async def export_transactions(user_id: str = Query(...), format: str = Query("csv"), start_date: str = Query(None)):
-    """거래 이력 내보내기"""
+    """Export transaction history"""
     try:
         if format == "csv":
             content = data_export.export_transactions_to_csv(user_id, start_date)
@@ -148,7 +148,7 @@ async def export_transactions(user_id: str = Query(...), format: str = Query("cs
 
 @router.get("/monthly-report")
 async def export_monthly_report(user_id: str = Query(...), year: int = Query(...), month: int = Query(...), format: str = Query("csv")):
-    """월간 리포트 내보내기"""
+    """Export monthly report"""
     try:
         report = data_export.generate_monthly_report(user_id, year, month)
 
@@ -190,7 +190,7 @@ async def export_monthly_report(user_id: str = Query(...), year: int = Query(...
 
 @router.get("/annual-report")
 async def export_annual_report(user_id: str = Query(...), year: int = Query(...), format: str = Query("csv")):
-    """연간 리포트 내보내기"""
+    """Export annual report"""
     try:
         report = data_export.generate_annual_report(user_id, year)
 
@@ -235,7 +235,7 @@ async def export_annual_report(user_id: str = Query(...), year: int = Query(...)
 
 @router.get("/summary/{user_id}")
 async def get_export_summary(user_id: str):
-    """내보내기 요약 정보"""
+    """Get export summary information"""
     try:
         summary = data_export.create_export_summary(user_id)
         return summary

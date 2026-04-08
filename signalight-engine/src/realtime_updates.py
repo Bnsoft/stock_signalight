@@ -1,4 +1,4 @@
-"""Real-time Updates Engine - 실시간 업데이트 시스템"""
+"""Real-time Updates Engine - Real-time Update System"""
 
 import asyncio
 import json
@@ -9,7 +9,7 @@ import random
 
 
 class RealtimeUpdateManager:
-    """WebSocket 실시간 업데이트 관리자"""
+    """WebSocket real-time update manager"""
 
     def __init__(self):
         self.active_connections: Dict[str, Set] = {}  # symbol -> set of websocket connections
@@ -17,7 +17,7 @@ class RealtimeUpdateManager:
         self.market_data_cache: Dict = {}  # symbol -> latest price data
 
     async def connect(self, websocket, symbol: str, connection_id: str):
-        """웹소켓 연결 수락"""
+        """Accept a WebSocket connection"""
         if symbol not in self.active_connections:
             self.active_connections[symbol] = set()
 
@@ -28,7 +28,7 @@ class RealtimeUpdateManager:
 
         self.subscriptions[connection_id].add(symbol)
 
-        # 최신 캐시 데이터 전송
+        # Send latest cached data
         if symbol in self.market_data_cache:
             await websocket.send_json({
                 "type": "initial_data",
@@ -37,7 +37,7 @@ class RealtimeUpdateManager:
             })
 
     async def disconnect(self, websocket, symbol: str, connection_id: str):
-        """웹소켓 연결 해제"""
+        """Disconnect a WebSocket connection"""
         if symbol in self.active_connections:
             self.active_connections[symbol].discard((websocket, connection_id))
 
@@ -48,7 +48,7 @@ class RealtimeUpdateManager:
             self.subscriptions[connection_id].discard(symbol)
 
     async def broadcast_price_update(self, symbol: str, price_data: Dict):
-        """가격 업데이트 브로드캐스트"""
+        """Broadcast a price update"""
         self.market_data_cache[symbol] = price_data
 
         if symbol not in self.active_connections:
@@ -65,12 +65,12 @@ class RealtimeUpdateManager:
             except Exception:
                 disconnected.append((websocket, connection_id))
 
-        # 연결이 끊긴 클라이언트 제거
+        # Remove disconnected clients
         for websocket, connection_id in disconnected:
             await self.disconnect(websocket, symbol, connection_id)
 
     async def broadcast_chart_update(self, symbol: str, chart_data: Dict):
-        """차트 데이터 브로드캐스트"""
+        """Broadcast chart data"""
         if symbol not in self.active_connections:
             return
 
@@ -89,7 +89,7 @@ class RealtimeUpdateManager:
             await self.disconnect(websocket, symbol, connection_id)
 
     async def broadcast_indicator_update(self, symbol: str, indicator_data: Dict):
-        """지표 업데이트 브로드캐스트"""
+        """Broadcast an indicator update"""
         if symbol not in self.active_connections:
             return
 
@@ -113,8 +113,8 @@ realtime_manager = RealtimeUpdateManager()
 
 
 def get_mock_price_update(symbol: str) -> Dict:
-    """시뮬레이션 가격 업데이트 생성"""
-    # 실제로는 실시간 데이터 소스(예: WebSocket broker API)에서 가져옴
+    """Generate a simulated price update"""
+    # In production, this would be fetched from a real-time data source (e.g., WebSocket broker API)
     base_prices = {
         "SPY": 450,
         "QQQ": 380,
@@ -125,8 +125,8 @@ def get_mock_price_update(symbol: str) -> Dict:
 
     base_price = base_prices.get(symbol, 100)
 
-    # 랜덤 변동 시뮬레이션
-    change = random.uniform(-1, 1) * (base_price * 0.001)  # ±0.1% 변동
+    # Simulate random price fluctuation
+    change = random.uniform(-1, 1) * (base_price * 0.001)  # ±0.1% variation
     current_price = base_price + change
     volume = random.randint(1000000, 50000000)
 
@@ -143,7 +143,7 @@ def get_mock_price_update(symbol: str) -> Dict:
 
 
 def get_mock_chart_data(symbol: str, timeframe: str = "1m") -> Dict:
-    """시뮬레이션 차트 데이터 생성"""
+    """Generate simulated chart data"""
     base_prices = {
         "SPY": 450,
         "QQQ": 380,
@@ -154,7 +154,7 @@ def get_mock_chart_data(symbol: str, timeframe: str = "1m") -> Dict:
 
     base_price = base_prices.get(symbol, 100)
 
-    # OHLCV 데이터 생성
+    # Generate OHLCV data
     open_price = base_price + random.uniform(-2, 2)
     close_price = base_price + random.uniform(-2, 2)
     high_price = max(open_price, close_price) + random.uniform(0, 2)
@@ -174,12 +174,12 @@ def get_mock_chart_data(symbol: str, timeframe: str = "1m") -> Dict:
 
 
 def get_mock_indicator_update(symbol: str) -> Dict:
-    """시뮬레이션 기술적 지표 업데이트"""
+    """Generate a simulated technical indicator update"""
     return {
         "timestamp": datetime.utcnow().isoformat(),
         "symbol": symbol,
         "rsi": round(random.uniform(30, 70), 2),
-        "sma_20": round(random.uniform(90, 110), 2) * 4,  # 대략적인 가격 범위
+        "sma_20": round(random.uniform(90, 110), 2) * 4,  # approximate price range
         "sma_50": round(random.uniform(85, 115), 2) * 4,
         "sma_200": round(random.uniform(80, 120), 2) * 4,
         "macd": round(random.uniform(-5, 5), 2),
@@ -194,19 +194,19 @@ def get_mock_indicator_update(symbol: str) -> Dict:
 
 
 async def simulate_market_data_stream(symbol: str, update_interval: int = 1):
-    """시장 데이터 스트림 시뮬레이션"""
+    """Simulate a market data stream"""
     while True:
         try:
-            # 가격 업데이트
+            # Price update
             price_data = get_mock_price_update(symbol)
             await realtime_manager.broadcast_price_update(symbol, price_data)
 
-            # 차트 데이터 (5초마다)
+            # Chart data (every ~5 seconds)
             if random.random() < 0.2:
                 chart_data = get_mock_chart_data(symbol, "1m")
                 await realtime_manager.broadcast_chart_update(symbol, chart_data)
 
-            # 지표 업데이트 (2초마다)
+            # Indicator update (every ~2 seconds)
             if random.random() < 0.5:
                 indicator_data = get_mock_indicator_update(symbol)
                 await realtime_manager.broadcast_indicator_update(symbol, indicator_data)
@@ -220,19 +220,19 @@ async def simulate_market_data_stream(symbol: str, update_interval: int = 1):
 
 
 class StreamTask:
-    """스트리밍 작업 관리"""
+    """Manages streaming tasks"""
     tasks: Dict[str, asyncio.Task] = {}
 
     @classmethod
     async def start_stream(cls, symbol: str):
-        """특정 심볼의 스트림 시작"""
+        """Start a stream for a given symbol"""
         if symbol not in cls.tasks:
             task = asyncio.create_task(simulate_market_data_stream(symbol))
             cls.tasks[symbol] = task
 
     @classmethod
     async def stop_stream(cls, symbol: str):
-        """특정 심볼의 스트림 중지"""
+        """Stop the stream for a given symbol"""
         if symbol in cls.tasks:
             cls.tasks[symbol].cancel()
             try:
@@ -243,7 +243,7 @@ class StreamTask:
 
     @classmethod
     async def cleanup(cls):
-        """모든 스트림 정리"""
+        """Clean up all streams"""
         for task in list(cls.tasks.values()):
             task.cancel()
             try:
@@ -253,14 +253,14 @@ class StreamTask:
         cls.tasks.clear()
 
 
-# 유틸리티 함수들
+# Utility functions
 
 def get_current_market_status() -> Dict:
-    """현재 시장 상태 조회"""
+    """Get the current market status"""
     current_hour = datetime.utcnow().hour
 
-    # 미국 시간 기준 (EST)
-    # 시장 개장: 09:30-16:00 EST (13:30-20:00 UTC)
+    # Based on US Eastern Time (EST)
+    # Market hours: 09:30-16:00 EST (13:30-20:00 UTC)
     is_market_open = 13 <= current_hour < 21
 
     return {
@@ -274,7 +274,7 @@ def get_current_market_status() -> Dict:
 
 
 def get_price_update_for_symbol(symbol: str) -> Dict:
-    """심볼에 대한 가격 업데이트 조회"""
+    """Get a price update for a given symbol"""
     with store._connect() as conn:
         price_data = conn.execute(
             """SELECT symbol, current_price, change_percent, volume, bid, ask
@@ -284,7 +284,7 @@ def get_price_update_for_symbol(symbol: str) -> Dict:
         ).fetchone()
 
     if not price_data:
-        # DB에 없으면 시뮬레이션 데이터 반환
+        # Not found in DB — return simulated data
         return get_mock_price_update(symbol)
 
     return {
@@ -299,7 +299,7 @@ def get_price_update_for_symbol(symbol: str) -> Dict:
 
 
 async def send_portfolio_update(websocket, user_id: str):
-    """포트폴리오 업데이트 전송"""
+    """Send a portfolio update"""
     with store._connect() as conn:
         positions = conn.execute(
             """SELECT symbol, quantity, entry_price, current_price
@@ -330,7 +330,7 @@ async def send_portfolio_update(websocket, user_id: str):
 
 
 async def send_watchlist_update(websocket, user_id: str):
-    """워치리스트 업데이트 전송"""
+    """Send a watchlist update"""
     with store._connect() as conn:
         watchlist = conn.execute(
             """SELECT symbol, added_at FROM watchlist WHERE user_id = ?""",
@@ -349,7 +349,7 @@ async def send_watchlist_update(websocket, user_id: str):
 
 
 async def send_alert_trigger_notification(websocket, alert_id: int, alert_data: Dict):
-    """알람 발생 알림 전송"""
+    """Send an alert trigger notification"""
     await websocket.send_json({
         "type": "alert_triggered",
         "alert_id": alert_id,
@@ -359,7 +359,7 @@ async def send_alert_trigger_notification(websocket, alert_id: int, alert_data: 
 
 
 async def send_news_update(websocket, symbol: str, news: Dict):
-    """뉴스 업데이트 전송"""
+    """Send a news update"""
     await websocket.send_json({
         "type": "news_update",
         "symbol": symbol,
