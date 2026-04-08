@@ -225,24 +225,6 @@ def init_db() -> None:
                 FOREIGN KEY (user_id) REFERENCES users(id)
             );
 
-            CREATE INDEX IF NOT EXISTS idx_signals_symbol_type ON signals(symbol, signal_type);
-            CREATE INDEX IF NOT EXISTS idx_signal_perf_status ON signal_performance(status);
-            CREATE INDEX IF NOT EXISTS idx_indicator_acc_name ON indicator_accuracy(indicator_name);
-            CREATE INDEX IF NOT EXISTS idx_backtest_symbol ON backtest_results(symbol);
-            CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
-            CREATE INDEX IF NOT EXISTS idx_user_prefs_user_id ON user_preferences(user_id);
-            CREATE INDEX IF NOT EXISTS idx_calcs_user_id ON calculations(user_id);
-            CREATE INDEX IF NOT EXISTS idx_positions_user_symbol ON positions(user_id, symbol);
-            CREATE INDEX IF NOT EXISTS idx_portfolio_history_user ON portfolio_history(user_id);
-            CREATE INDEX IF NOT EXISTS idx_portfolio_targets_user ON portfolio_targets(user_id);
-            CREATE INDEX IF NOT EXISTS idx_investment_goals_user ON investment_goals(user_id);
-            CREATE INDEX IF NOT EXISTS idx_rebalance_history_user ON rebalance_history(user_id);
-            CREATE INDEX IF NOT EXISTS idx_signal_confidence ON signal_confidence(symbol, signal_type);
-            CREATE INDEX IF NOT EXISTS idx_news_signals_symbol ON news_signals(symbol);
-            CREATE INDEX IF NOT EXISTS idx_auto_trades_user ON auto_trades(user_id);
-            CREATE INDEX IF NOT EXISTS idx_community_posts_user ON community_posts(user_id);
-            CREATE INDEX IF NOT EXISTS idx_leaderboard_month ON leaderboard(month);
-
             -- Phase 11: AI & Machine Learning
             CREATE TABLE IF NOT EXISTS signal_confidence (
                 id                 INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -521,6 +503,24 @@ def init_db() -> None:
                 tracked_at         DATETIME DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (user_id) REFERENCES users(id)
             );
+
+            CREATE INDEX IF NOT EXISTS idx_signals_symbol_type ON signals(symbol, signal_type);
+            CREATE INDEX IF NOT EXISTS idx_signal_perf_status ON signal_performance(status);
+            CREATE INDEX IF NOT EXISTS idx_indicator_acc_name ON indicator_accuracy(indicator_name);
+            CREATE INDEX IF NOT EXISTS idx_backtest_symbol ON backtest_results(symbol);
+            CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
+            CREATE INDEX IF NOT EXISTS idx_user_prefs_user_id ON user_preferences(user_id);
+            CREATE INDEX IF NOT EXISTS idx_calcs_user_id ON calculations(user_id);
+            CREATE INDEX IF NOT EXISTS idx_positions_user_symbol ON positions(user_id, symbol);
+            CREATE INDEX IF NOT EXISTS idx_portfolio_history_user ON portfolio_history(user_id);
+            CREATE INDEX IF NOT EXISTS idx_portfolio_targets_user ON portfolio_targets(user_id);
+            CREATE INDEX IF NOT EXISTS idx_investment_goals_user ON investment_goals(user_id);
+            CREATE INDEX IF NOT EXISTS idx_rebalance_history_user ON rebalance_history(user_id);
+            CREATE INDEX IF NOT EXISTS idx_signal_confidence ON signal_confidence(symbol, signal_type);
+            CREATE INDEX IF NOT EXISTS idx_news_signals_symbol ON news_signals(symbol);
+            CREATE INDEX IF NOT EXISTS idx_auto_trades_user ON auto_trades(user_id);
+            CREATE INDEX IF NOT EXISTS idx_community_posts_user ON community_posts(user_id);
+            CREATE INDEX IF NOT EXISTS idx_leaderboard_month ON leaderboard(month);
         """)
     _seed_watchlist()
     logger.info("SQLite database initialised with analytics tables")
