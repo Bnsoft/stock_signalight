@@ -1,5 +1,18 @@
 # Real-time Streaming
 
+> **Data source**: yfinance (free, ~15min delayed during market hours, real after close)
+> **No API key required**
+
+## Update Intervals
+| Data | Interval | Method |
+|------|----------|--------|
+| Price (fast_info) | 15s | WebSocket broadcast |
+| Latest candle | 60s | WebSocket broadcast |
+| Full indicators | 120s | WebSocket broadcast |
+| REST quote | on-demand | `GET /api/quote/{symbol}` |
+| REST chart | on-demand | `GET /api/chart/{symbol}` |
+
+
 Module: `realtime_updates.py` · Hook: `src/hooks/useRealtimeData.ts`
 
 ## WebSocket Architecture

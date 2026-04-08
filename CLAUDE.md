@@ -32,6 +32,23 @@ docs/                    → Reference docs (read before working on a feature)
 | CSV/PDF export         | `docs/features/export.md`             |
 | WebSocket/streaming    | `docs/features/realtime.md`           |
 
+## Local Dev Start Commands
+```bash
+# Backend (FastAPI)
+cd signalight-engine && uv run uvicorn src.main:app --reload --port 8000
+
+# Frontend (Next.js)
+cd signalight-web/signalight-landing && bun dev
+
+# Telegram bot (separate process)
+cd signalight-engine && uv run python -m src.app
+```
+
+## Deployment
+- **Frontend**: Vercel — auto-deploy on push to `main`
+- **Backend**: Railway — auto-deploy on push to `main`, root dir = `signalight-engine`
+- **DB**: Supabase PostgreSQL (primary) + SQLite local backup
+
 ## Rules
 - All code comments and docstrings in **English**
 - User-facing strings (UI labels, API response values) may remain in Korean

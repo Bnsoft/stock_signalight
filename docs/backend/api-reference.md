@@ -39,7 +39,17 @@ Auth: `Authorization: Bearer {token}` (token = `user_id.timestamp.signature`)
 ## Watchlist
 | Method | Path | Description |
 |--------|------|-------------|
-| GET | `/api/watchlist` | Get watchlist |
+| GET | `/api/watchlist` | Get watchlist with real-time prices (yfinance) |
+| POST | `/api/watchlist` | Add symbol `{symbol, name?}` — validates via yfinance |
+| DELETE | `/api/watchlist/{symbol}` | Remove symbol |
+
+## Market Data (Real — yfinance)
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/api/quote/{symbol}` | Current price + full indicators `{symbol, price, indicators, timestamp}` |
+| GET | `/api/chart/{symbol}` | OHLCV candles `?interval=1m\|5m\|15m\|1h\|1d\|1wk\|1mo&period=1d\|5d\|1mo\|3mo\|6mo\|1y\|2y\|5y` |
+| GET | `/api/signals/recent` | Real signals from DB `?limit=50&symbol=` (last 7 days) |
+| POST | `/api/scan/run` | Trigger manual scan of full watchlist — saves signals to DB |
 
 ## Portfolio
 | Method | Path | Description |
