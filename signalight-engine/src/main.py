@@ -67,6 +67,11 @@ app.include_router(routes_export.router)
 app.include_router(routes_settings.router)
 app.include_router(routes_dashboard.router)
 
+# Mount all routes from api.py (auth, watchlist, chart, signals, etc.)
+from .api import app as _api_app
+for route in _api_app.routes:
+    app.routes.append(route)
+
 
 # ============= Alert Routes =============
 
