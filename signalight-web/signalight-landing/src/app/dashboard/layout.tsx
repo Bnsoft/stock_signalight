@@ -8,9 +8,11 @@ export default function DashboardLayout({
 }) {
   return (
     <ProtectedRoute>
-      <div className="min-h-screen flex flex-col">
+      <div className="min-h-screen flex">
         <DashboardNav />
-        <div className="flex-1">{children}</div>
+        <main className="flex-1 min-w-0">
+          {children}
+        </main>
       </div>
     </ProtectedRoute>
   )

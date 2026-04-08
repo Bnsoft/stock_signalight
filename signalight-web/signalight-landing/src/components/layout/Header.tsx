@@ -54,9 +54,11 @@ export function Header() {
         {/* Right side */}
         <div className="flex items-center gap-2">
           <ThemeToggle />
-          <Button size="sm" className="hidden sm:flex bg-signal-green hover:bg-signal-green/90 text-black font-semibold">
-            Get Started
-          </Button>
+          <a href="/auth/login">
+            <Button size="sm" className="hidden sm:flex bg-signal-green hover:bg-signal-green/90 text-black font-semibold">
+              Get Started
+            </Button>
+          </a>
           {/* Mobile menu toggle */}
           <button
             className="md:hidden p-2 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted"
