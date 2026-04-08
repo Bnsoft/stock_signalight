@@ -1,23 +1,109 @@
-"""Real-time Updates Engine - Real-time Update System"""
+"""Real-time Updates Engine — yfinance-based real market data"""
 
 import asyncio
-import json
-from datetime import datetime, timedelta
-from typing import Dict, List, Set, Optional
-from . import store
-import random
+import logging
+from datetime import datetime, timezone
+from typing import Dict, Set, Optional
+
+logger = logging.getLogger(__name__)
+
+# Cache: symbol -> {price, change, prev_close, timestamp}
+_price_cache: Dict[str, dict] = {}
+
+
+def _fetch_real_price(symbol: str) -> Optional[dict]:
+    """Fetch current price data via yfinance. Returns None on failure."""
+    try:
+        import yfinance as yf
+        ticker = yf.Ticker(symbol)
+        info = ticker.fast_info
+
+        price = info.last_price
+        prev_close = info.previous_close or info.regular_market_previous_close
+
+        if not price or price <= 0:
+            # Fallback: last row of recent history
+            df = ticker.history(period="2d", interval="1d")
+            if df.empty:
+                return None
+            price = float(df["Close"].iloc[-1])
+            prev_close = float(df["Close"].iloc[-2]) if len(df) > 1 else price
+
+        price = round(float(price), 4)
+        prev_close = round(float(prev_close), 4) if prev_close else price
+        change = round(price - prev_close, 4)
+        change_pct = round((change / prev_close) * 100, 2) if prev_close else 0.0
+
+        volume = None
+        try:
+            volume = int(info.three_month_average_volume or 0)
+        except Exception:
+            pass
+
+        return {
+            "price": price,
+            "prev_close": prev_close,
+            "change": change,
+            "change_percent": change_pct,
+            "volume": volume,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        }
+    except Exception as e:
+        logger.debug(f"Price fetch failed for {symbol}: {e}")
+        return None
+
+
+def _fetch_real_indicators(symbol: str) -> Optional[dict]:
+    """Calculate real technical indicators via yfinance + pulse module."""
+    try:
+        from .market import fetch_daily_data
+        from .pulse import get_all_indicators
+        df = fetch_daily_data(symbol, period="6mo")
+        if df.empty:
+            return None
+        return get_all_indicators(df)
+    except Exception as e:
+        logger.debug(f"Indicator fetch failed for {symbol}: {e}")
+        return None
+
+
+def _fetch_latest_candle(symbol: str) -> Optional[dict]:
+    """Fetch the most recent 1-day candle for a symbol."""
+    try:
+        import yfinance as yf
+        df = yf.Ticker(symbol).history(period="1d", interval="1d")
+        if df.empty:
+            return None
+        row = df.iloc[-1]
+        return {
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "open": round(float(row["Open"]), 4),
+            "high": round(float(row["High"]), 4),
+            "low": round(float(row["Low"]), 4),
+            "close": round(float(row["Close"]), 4),
+            "volume": int(row["Volume"]),
+        }
+    except Exception as e:
+        logger.debug(f"Candle fetch failed for {symbol}: {e}")
+        return None
 
 
 class RealtimeUpdateManager:
     """WebSocket real-time update manager"""
 
     def __init__(self):
-        self.active_connections: Dict[str, Set] = {}  # symbol -> set of websocket connections
-        self.subscriptions: Dict = {}  # connection_id -> list of subscribed symbols
-        self.market_data_cache: Dict = {}  # symbol -> latest price data
+        # symbol -> set of (websocket, connection_id) tuples
+        self.active_connections: Dict[str, Set] = {}
+        # connection_id -> set of subscribed symbols
+        self.subscriptions: Dict[str, Set] = {}
+        # symbol -> latest cached price data
+        self.market_data_cache: Dict[str, dict] = {}
+        # symbol -> running stream task
+        self._stream_tasks: Dict[str, asyncio.Task] = {}
 
     async def connect(self, websocket, symbol: str, connection_id: str):
-        """Accept a WebSocket connection"""
+        """Accept a WebSocket connection and start streaming if needed."""
+        symbol = symbol.upper()
         if symbol not in self.active_connections:
             self.active_connections[symbol] = set()
 
@@ -25,344 +111,121 @@ class RealtimeUpdateManager:
 
         if connection_id not in self.subscriptions:
             self.subscriptions[connection_id] = set()
-
         self.subscriptions[connection_id].add(symbol)
 
-        # Send latest cached data
+        # Send cached data immediately so client isn't blank
         if symbol in self.market_data_cache:
             await websocket.send_json({
                 "type": "initial_data",
                 "symbol": symbol,
-                "data": self.market_data_cache[symbol]
+                "data": self.market_data_cache[symbol],
             })
 
+        # Start background stream if not already running
+        if symbol not in self._stream_tasks or self._stream_tasks[symbol].done():
+            self._stream_tasks[symbol] = asyncio.create_task(
+                self._stream_symbol(symbol)
+            )
+
     async def disconnect(self, websocket, symbol: str, connection_id: str):
-        """Disconnect a WebSocket connection"""
+        """Disconnect and clean up."""
+        symbol = symbol.upper()
         if symbol in self.active_connections:
             self.active_connections[symbol].discard((websocket, connection_id))
-
             if not self.active_connections[symbol]:
                 del self.active_connections[symbol]
+                # Stop stream task when no subscribers remain
+                task = self._stream_tasks.pop(symbol, None)
+                if task and not task.done():
+                    task.cancel()
 
         if connection_id in self.subscriptions:
             self.subscriptions[connection_id].discard(symbol)
 
-    async def broadcast_price_update(self, symbol: str, price_data: Dict):
-        """Broadcast a price update"""
-        self.market_data_cache[symbol] = price_data
+    async def broadcast_price_update(self, symbol: str, data: dict):
+        """Broadcast price update to all symbol subscribers."""
+        self.market_data_cache[symbol] = data
+        await self._broadcast(symbol, {"type": "price_update", "symbol": symbol, "data": data})
 
+    async def broadcast_chart_update(self, symbol: str, data: dict):
+        await self._broadcast(symbol, {"type": "chart_update", "symbol": symbol, "data": data})
+
+    async def broadcast_indicator_update(self, symbol: str, data: dict):
+        await self._broadcast(symbol, {"type": "indicator_update", "symbol": symbol, "data": data})
+
+    async def _broadcast(self, symbol: str, message: dict):
         if symbol not in self.active_connections:
             return
-
         disconnected = []
         for websocket, connection_id in list(self.active_connections[symbol]):
             try:
-                await websocket.send_json({
-                    "type": "price_update",
-                    "symbol": symbol,
-                    "data": price_data
-                })
+                await websocket.send_json(message)
             except Exception:
                 disconnected.append((websocket, connection_id))
+        for ws, cid in disconnected:
+            await self.disconnect(ws, symbol, cid)
 
-        # Remove disconnected clients
-        for websocket, connection_id in disconnected:
-            await self.disconnect(websocket, symbol, connection_id)
+    async def _stream_symbol(self, symbol: str):
+        """Background task: fetch real yfinance data and broadcast every 15s.
 
-    async def broadcast_chart_update(self, symbol: str, chart_data: Dict):
-        """Broadcast chart data"""
-        if symbol not in self.active_connections:
-            return
-
-        disconnected = []
-        for websocket, connection_id in list(self.active_connections[symbol]):
+        yfinance data is ~15-min delayed during market hours.
+        After market close the price is the official closing price.
+        Interval is 15s to avoid hammering Yahoo Finance.
+        """
+        tick = 0
+        while symbol in self.active_connections:
             try:
-                await websocket.send_json({
-                    "type": "chart_update",
-                    "symbol": symbol,
-                    "data": chart_data
-                })
-            except Exception:
-                disconnected.append((websocket, connection_id))
+                # Price update every cycle (15s)
+                price_data = await asyncio.get_event_loop().run_in_executor(
+                    None, _fetch_real_price, symbol
+                )
+                if price_data:
+                    await self.broadcast_price_update(symbol, price_data)
 
-        for websocket, connection_id in disconnected:
-            await self.disconnect(websocket, symbol, connection_id)
+                # Latest candle every 4th cycle (~60s)
+                if tick % 4 == 0:
+                    candle = await asyncio.get_event_loop().run_in_executor(
+                        None, _fetch_latest_candle, symbol
+                    )
+                    if candle:
+                        await self.broadcast_chart_update(symbol, candle)
 
-    async def broadcast_indicator_update(self, symbol: str, indicator_data: Dict):
-        """Broadcast an indicator update"""
-        if symbol not in self.active_connections:
-            return
+                # Indicators every 8th cycle (~120s) — heavier calculation
+                if tick % 8 == 0:
+                    indicators = await asyncio.get_event_loop().run_in_executor(
+                        None, _fetch_real_indicators, symbol
+                    )
+                    if indicators:
+                        await self.broadcast_indicator_update(symbol, indicators)
 
-        disconnected = []
-        for websocket, connection_id in list(self.active_connections[symbol]):
-            try:
-                await websocket.send_json({
-                    "type": "indicator_update",
-                    "symbol": symbol,
-                    "data": indicator_data
-                })
-            except Exception:
-                disconnected.append((websocket, connection_id))
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                logger.warning(f"Stream error for {symbol}: {e}")
 
-        for websocket, connection_id in disconnected:
-            await self.disconnect(websocket, symbol, connection_id)
+            tick += 1
+            await asyncio.sleep(15)
 
 
-# Global manager instance
+# Global singleton
 realtime_manager = RealtimeUpdateManager()
 
 
-def get_mock_price_update(symbol: str) -> Dict:
-    """Generate a simulated price update"""
-    # In production, this would be fetched from a real-time data source (e.g., WebSocket broker API)
-    base_prices = {
-        "SPY": 450,
-        "QQQ": 380,
-        "AAPL": 170,
-        "MSFT": 420,
-        "NVDA": 875,
-    }
-
-    base_price = base_prices.get(symbol, 100)
-
-    # Simulate random price fluctuation
-    change = random.uniform(-1, 1) * (base_price * 0.001)  # ±0.1% variation
-    current_price = base_price + change
-    volume = random.randint(1000000, 50000000)
-
+def get_current_market_status() -> dict:
+    """Return current market open/closed status (NYSE hours)."""
+    import zoneinfo
+    now = datetime.now(zoneinfo.ZoneInfo("America/New_York"))
+    is_weekday = now.weekday() < 5
+    market_open = now.replace(hour=9, minute=30, second=0, microsecond=0)
+    market_close = now.replace(hour=16, minute=0, second=0, microsecond=0)
+    is_open = is_weekday and market_open <= now <= market_close
     return {
-        "timestamp": datetime.utcnow().isoformat(),
-        "symbol": symbol,
-        "price": round(current_price, 2),
-        "bid": round(current_price - 0.01, 2),
-        "ask": round(current_price + 0.01, 2),
-        "volume": volume,
-        "change_percent": round((change / base_price) * 100, 2),
-        "market_cap": None,
+        "is_open": is_open,
+        "current_time_et": now.strftime("%Y-%m-%d %H:%M:%S ET"),
+        "session": "regular" if is_open else ("pre" if now < market_open and is_weekday else "after"),
     }
 
 
-def get_mock_chart_data(symbol: str, timeframe: str = "1m") -> Dict:
-    """Generate simulated chart data"""
-    base_prices = {
-        "SPY": 450,
-        "QQQ": 380,
-        "AAPL": 170,
-        "MSFT": 420,
-        "NVDA": 875,
-    }
-
-    base_price = base_prices.get(symbol, 100)
-
-    # Generate OHLCV data
-    open_price = base_price + random.uniform(-2, 2)
-    close_price = base_price + random.uniform(-2, 2)
-    high_price = max(open_price, close_price) + random.uniform(0, 2)
-    low_price = min(open_price, close_price) - random.uniform(0, 2)
-    volume = random.randint(1000000, 50000000)
-
-    return {
-        "timestamp": datetime.utcnow().isoformat(),
-        "symbol": symbol,
-        "timeframe": timeframe,
-        "open": round(open_price, 2),
-        "high": round(high_price, 2),
-        "low": round(low_price, 2),
-        "close": round(close_price, 2),
-        "volume": volume,
-    }
-
-
-def get_mock_indicator_update(symbol: str) -> Dict:
-    """Generate a simulated technical indicator update"""
-    return {
-        "timestamp": datetime.utcnow().isoformat(),
-        "symbol": symbol,
-        "rsi": round(random.uniform(30, 70), 2),
-        "sma_20": round(random.uniform(90, 110), 2) * 4,  # approximate price range
-        "sma_50": round(random.uniform(85, 115), 2) * 4,
-        "sma_200": round(random.uniform(80, 120), 2) * 4,
-        "macd": round(random.uniform(-5, 5), 2),
-        "macd_signal": round(random.uniform(-5, 5), 2),
-        "bollinger_upper": round(random.uniform(100, 120), 2) * 4,
-        "bollinger_middle": round(random.uniform(90, 110), 2) * 4,
-        "bollinger_lower": round(random.uniform(80, 100), 2) * 4,
-        "atr": round(random.uniform(1, 5), 2),
-        "stoch_k": round(random.uniform(0, 100), 2),
-        "stoch_d": round(random.uniform(0, 100), 2),
-    }
-
-
-async def simulate_market_data_stream(symbol: str, update_interval: int = 1):
-    """Simulate a market data stream"""
-    while True:
-        try:
-            # Price update
-            price_data = get_mock_price_update(symbol)
-            await realtime_manager.broadcast_price_update(symbol, price_data)
-
-            # Chart data (every ~5 seconds)
-            if random.random() < 0.2:
-                chart_data = get_mock_chart_data(symbol, "1m")
-                await realtime_manager.broadcast_chart_update(symbol, chart_data)
-
-            # Indicator update (every ~2 seconds)
-            if random.random() < 0.5:
-                indicator_data = get_mock_indicator_update(symbol)
-                await realtime_manager.broadcast_indicator_update(symbol, indicator_data)
-
-            await asyncio.sleep(update_interval)
-        except asyncio.CancelledError:
-            break
-        except Exception as e:
-            print(f"Error in market data stream for {symbol}: {e}")
-            await asyncio.sleep(update_interval)
-
-
-class StreamTask:
-    """Manages streaming tasks"""
-    tasks: Dict[str, asyncio.Task] = {}
-
-    @classmethod
-    async def start_stream(cls, symbol: str):
-        """Start a stream for a given symbol"""
-        if symbol not in cls.tasks:
-            task = asyncio.create_task(simulate_market_data_stream(symbol))
-            cls.tasks[symbol] = task
-
-    @classmethod
-    async def stop_stream(cls, symbol: str):
-        """Stop the stream for a given symbol"""
-        if symbol in cls.tasks:
-            cls.tasks[symbol].cancel()
-            try:
-                await cls.tasks[symbol]
-            except asyncio.CancelledError:
-                pass
-            del cls.tasks[symbol]
-
-    @classmethod
-    async def cleanup(cls):
-        """Clean up all streams"""
-        for task in list(cls.tasks.values()):
-            task.cancel()
-            try:
-                await task
-            except asyncio.CancelledError:
-                pass
-        cls.tasks.clear()
-
-
-# Utility functions
-
-def get_current_market_status() -> Dict:
-    """Get the current market status"""
-    current_hour = datetime.utcnow().hour
-
-    # Based on US Eastern Time (EST)
-    # Market hours: 09:30-16:00 EST (13:30-20:00 UTC)
-    is_market_open = 13 <= current_hour < 21
-
-    return {
-        "timestamp": datetime.utcnow().isoformat(),
-        "is_market_open": is_market_open,
-        "market_status": "OPEN" if is_market_open else "CLOSED",
-        "market_hours": "09:30-16:00 EST",
-        "premarket_hours": "04:00-09:30 EST",
-        "afterhours_hours": "16:00-20:00 EST",
-    }
-
-
-def get_price_update_for_symbol(symbol: str) -> Dict:
-    """Get a price update for a given symbol"""
-    with store._connect() as conn:
-        price_data = conn.execute(
-            """SELECT symbol, current_price, change_percent, volume, bid, ask
-               FROM positions
-               WHERE symbol = ?""",
-            (symbol.upper(),)
-        ).fetchone()
-
-    if not price_data:
-        # Not found in DB — return simulated data
-        return get_mock_price_update(symbol)
-
-    return {
-        "timestamp": datetime.utcnow().isoformat(),
-        "symbol": price_data[0],
-        "price": price_data[1],
-        "change_percent": price_data[2],
-        "volume": price_data[3],
-        "bid": price_data[4] or price_data[1] - 0.01,
-        "ask": price_data[5] or price_data[1] + 0.01,
-    }
-
-
-async def send_portfolio_update(websocket, user_id: str):
-    """Send a portfolio update"""
-    with store._connect() as conn:
-        positions = conn.execute(
-            """SELECT symbol, quantity, entry_price, current_price
-               FROM positions
-               WHERE user_id = ?""",
-            (user_id,)
-        ).fetchall()
-
-    portfolio_data = {
-        "timestamp": datetime.utcnow().isoformat(),
-        "positions": [
-            {
-                "symbol": p[0],
-                "quantity": p[1],
-                "entry_price": p[2],
-                "current_price": p[3],
-                "pnl": (p[3] - p[2]) * p[1],
-                "pnl_percent": ((p[3] - p[2]) / p[2] * 100) if p[2] else 0,
-            }
-            for p in positions
-        ]
-    }
-
-    await websocket.send_json({
-        "type": "portfolio_update",
-        "data": portfolio_data
-    })
-
-
-async def send_watchlist_update(websocket, user_id: str):
-    """Send a watchlist update"""
-    with store._connect() as conn:
-        watchlist = conn.execute(
-            """SELECT symbol, added_at FROM watchlist WHERE user_id = ?""",
-            (user_id,)
-        ).fetchall()
-
-    watchlist_data = {
-        "timestamp": datetime.utcnow().isoformat(),
-        "symbols": [{"symbol": w[0], "added_at": w[1]} for w in watchlist]
-    }
-
-    await websocket.send_json({
-        "type": "watchlist_update",
-        "data": watchlist_data
-    })
-
-
-async def send_alert_trigger_notification(websocket, alert_id: int, alert_data: Dict):
-    """Send an alert trigger notification"""
-    await websocket.send_json({
-        "type": "alert_triggered",
-        "alert_id": alert_id,
-        "timestamp": datetime.utcnow().isoformat(),
-        "data": alert_data
-    })
-
-
-async def send_news_update(websocket, symbol: str, news: Dict):
-    """Send a news update"""
-    await websocket.send_json({
-        "type": "news_update",
-        "symbol": symbol,
-        "timestamp": datetime.utcnow().isoformat(),
-        "data": news
-    })
+def get_price_update_for_symbol(symbol: str) -> Optional[dict]:
+    """Single price snapshot (no WebSocket). Used by REST fallback endpoint."""
+    return _fetch_real_price(symbol.upper())

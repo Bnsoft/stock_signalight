@@ -157,20 +157,218 @@ async def get_indicators(symbol: str):
 
 @app.get("/api/watchlist")
 async def get_watchlist():
-    """Retrieve watchlist"""
+    """Return watchlist with real-time price data from yfinance."""
     try:
-        conn = db_store._connect()
-        cursor = conn.cursor()
+        wl = db_store.get_watchlist()
+        symbols = [e["symbol"] for e in wl]
 
-        cursor.execute(
-            "SELECT symbol FROM watchlist WHERE active = 1 ORDER BY symbol"
+        # Fetch real prices in parallel
+        from .market import fetch_current_price
+        import asyncio
+
+        async def _price(sym: str):
+            price = await asyncio.get_event_loop().run_in_executor(
+                None, fetch_current_price, sym
+            )
+            return sym, price
+
+        results = await asyncio.gather(*[_price(s) for s in symbols], return_exceptions=True)
+
+        items = []
+        for entry in wl:
+            sym = entry["symbol"]
+            price = None
+            for r in results:
+                if isinstance(r, tuple) and r[0] == sym:
+                    price = r[1]
+                    break
+            items.append({
+                "symbol": sym,
+                "name": entry.get("name", sym),
+                "price": price,
+            })
+
+        return {"symbols": symbols, "items": items, "count": len(items)}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+class WatchlistAddRequest(BaseModel):
+    symbol: str
+    name: str = ""
+
+
+@app.post("/api/watchlist")
+async def add_to_watchlist(req: WatchlistAddRequest):
+    """Add a symbol to the watchlist."""
+    try:
+        import yfinance as yf
+        symbol = req.symbol.upper().strip()
+        # Validate symbol exists
+        ticker = yf.Ticker(symbol)
+        info = ticker.fast_info
+        if not info.last_price:
+            raise HTTPException(status_code=404, detail=f"Symbol {symbol} not found")
+        name = req.name or symbol
+        added = db_store.add_to_watchlist(symbol, name)
+        return {"success": True, "symbol": symbol, "added": added}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.delete("/api/watchlist/{symbol}")
+async def remove_from_watchlist(symbol: str):
+    """Remove a symbol from the watchlist."""
+    try:
+        removed = db_store.remove_from_watchlist(symbol.upper())
+        return {"success": True, "symbol": symbol.upper(), "removed": removed}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/quote/{symbol}")
+async def get_quote(symbol: str):
+    """Real-time price quote + technical indicators for a symbol."""
+    try:
+        from .market import fetch_daily_data, fetch_current_price
+        from .pulse import get_all_indicators
+        import asyncio
+
+        sym = symbol.upper()
+
+        price_task = asyncio.get_event_loop().run_in_executor(
+            None, fetch_current_price, sym
         )
-        rows = cursor.fetchall()
-        symbols = [row[0] for row in rows]
-        conn.close()
+        df_task = asyncio.get_event_loop().run_in_executor(
+            None, fetch_daily_data, sym, "6mo"
+        )
 
-        return {"symbols": symbols, "count": len(symbols)}
+        price, df = await asyncio.gather(price_task, df_task)
 
+        indicators = get_all_indicators(df) if not df.empty else {}
+
+        return {
+            "symbol": sym,
+            "price": price,
+            "indicators": indicators,
+            "timestamp": datetime.utcnow().isoformat(),
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/chart/{symbol}")
+async def get_chart(symbol: str, interval: str = "1d", period: str = "6mo"):
+    """OHLCV chart data from yfinance.
+
+    interval: 1m 5m 15m 30m 1h 1d 1wk 1mo
+    period:   1d 5d 1mo 3mo 6mo 1y 2y 5y max
+    """
+    try:
+        import yfinance as yf
+        import asyncio
+
+        sym = symbol.upper()
+
+        # Adjust period for intraday intervals
+        intraday = interval in ("1m", "2m", "5m", "15m", "30m", "60m", "1h")
+        if intraday and period not in ("1d", "5d", "1mo"):
+            period = "5d"
+
+        def _fetch():
+            df = yf.Ticker(sym).history(period=period, interval=interval)
+            return df
+
+        df = await asyncio.get_event_loop().run_in_executor(None, _fetch)
+
+        if df.empty:
+            raise HTTPException(status_code=404, detail=f"No data for {sym}")
+
+        candles = []
+        for ts, row in df.iterrows():
+            candles.append({
+                "timestamp": ts.isoformat(),
+                "open": round(float(row["Open"]), 4),
+                "high": round(float(row["High"]), 4),
+                "low": round(float(row["Low"]), 4),
+                "close": round(float(row["Close"]), 4),
+                "volume": int(row["Volume"]),
+            })
+
+        return {
+            "symbol": sym,
+            "interval": interval,
+            "period": period,
+            "candles": candles,
+            "count": len(candles),
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/signals/recent")
+async def get_recent_signals(limit: int = 50, symbol: Optional[str] = None):
+    """Recent signals from the database (real signals from the scan engine)."""
+    try:
+        signals = db_store.get_recent_signals(hours=168)  # last 7 days
+        if symbol:
+            signals = [s for s in signals if s.get("symbol", "").upper() == symbol.upper()]
+        signals = signals[:limit]
+        return {"signals": signals, "count": len(signals)}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/scan/run")
+async def trigger_scan():
+    """Trigger a manual scan from the web dashboard."""
+    try:
+        from .market import fetch_daily_data
+        from .pulse import get_all_indicators
+        from .trigger import evaluate_all_signals
+        import asyncio
+
+        wl = db_store.get_watchlist()
+        if not wl:
+            return {"signals": [], "message": "Watchlist is empty"}
+
+        all_signals = []
+        errors = []
+
+        for entry in wl:
+            sym = entry["symbol"]
+            try:
+                df = await asyncio.get_event_loop().run_in_executor(
+                    None, fetch_daily_data, sym, "6mo"
+                )
+                if df.empty:
+                    continue
+                indicators = get_all_indicators(df)
+                signals = evaluate_all_signals(sym, indicators, {})
+                for sig in signals:
+                    db_store.save_signal(
+                        symbol=sig["symbol"],
+                        signal_type=sig["signal_type"],
+                        severity=sig["severity"],
+                        message=sig["message"],
+                        indicators=sig["indicators"],
+                        price=sig["price"],
+                    )
+                    all_signals.append(sig)
+            except Exception as e:
+                errors.append(f"{sym}: {e}")
+
+        return {
+            "signals": all_signals,
+            "count": len(all_signals),
+            "scanned": len(wl),
+            "errors": errors,
+            "timestamp": datetime.utcnow().isoformat(),
+        }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

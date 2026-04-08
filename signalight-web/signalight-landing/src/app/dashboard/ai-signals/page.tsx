@@ -1,336 +1,255 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import React, { useEffect, useState, useCallback } from "react"
 import { useAuth } from "@/context/AuthContext"
 import { AnimateIn } from "@/components/layout/AnimateIn"
-import { Zap, TrendingUp, AlertTriangle, Lightbulb } from "lucide-react"
+import { Zap, TrendingUp, AlertTriangle, RefreshCw, Play, BarChart2 } from "lucide-react"
+import { useToast } from "@/hooks/useToast"
+import { ToastContainer } from "@/components/ToastContainer"
+import Link from "next/link"
 
 interface Signal {
-  id: number
+  id?: number
   symbol: string
   signal_type: string
-  confidence_score: number
-  confidence?: number
-  matched_score?: number
+  severity?: string
   message: string
-  created_at: string
-}
-
-interface Pattern {
-  type: string
-  confidence: number
-  signal: string
-}
-
-interface RiskProfile {
-  risk_profile: string
-  experience_level: string
-  avg_roi: number
-}
-
-interface Anomaly {
-  type: string
-  severity: string
-  count?: number
-  message: string
+  price?: number
+  created_at?: string
+  timestamp?: string
 }
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"
 
-export default function AISignalsPage() {
-  const { user, token } = useAuth()
+const SEVERITY_STYLE: Record<string, string> = {
+  HIGH:   "bg-red-600/10 text-red-600 border-red-600/30",
+  MEDIUM: "bg-yellow-600/10 text-yellow-600 border-yellow-600/30",
+  LOW:    "bg-blue-600/10 text-blue-600 border-blue-600/30",
+}
+
+const SIGNAL_ICON: Record<string, React.ReactNode> = {
+  BUY:         <TrendingUp size={16} className="text-green-600" />,
+  SELL:        <TrendingUp size={16} className="text-red-600 rotate-180" />,
+  STRONG_BUY:  <TrendingUp size={16} className="text-green-600" />,
+  STRONG_SELL: <TrendingUp size={16} className="text-red-600 rotate-180" />,
+  WARNING:     <AlertTriangle size={16} className="text-yellow-600" />,
+}
+
+export default function SignalsPage() {
+  const { token } = useAuth()
+  const { toasts, removeToast, success, error: showError } = useToast()
+  const [signals, setSignals] = useState<Signal[]>([])
   const [loading, setLoading] = useState(true)
-  const [riskProfile, setRiskProfile] = useState<RiskProfile | null>(null)
-  const [recommendations, setRecommendations] = useState<Signal[]>([])
-  const [patterns, setPatterns] = useState<Pattern[]>([])
-  const [anomalies, setAnomalies] = useState<Anomaly[]>([])
-  const [selectedSymbol, setSelectedSymbol] = useState("QQQ")
-  const [predictions, setPredictions] = useState<any>(null)
+  const [scanning, setScanning] = useState(false)
+  const [stats, setStats] = useState({ total: 0, buy: 0, sell: 0, warning: 0 })
+  const [filterSymbol, setFilterSymbol] = useState("")
+  const [lastScan, setLastScan] = useState<string>("")
+
+  const loadSignals = useCallback(async () => {
+    setLoading(true)
+    try {
+      const url = filterSymbol
+        ? `${API_BASE}/api/signals/recent?symbol=${filterSymbol}`
+        : `${API_BASE}/api/signals/recent?limit=100`
+      const res = await fetch(url, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      if (!res.ok) throw new Error("시그널 로드 실패")
+      const data = await res.json()
+      const list: Signal[] = data.signals || []
+      setSignals(list)
+
+      // Compute stats
+      setStats({
+        total: list.length,
+        buy: list.filter((s) => s.signal_type?.includes("BUY")).length,
+        sell: list.filter((s) => s.signal_type?.includes("SELL")).length,
+        warning: list.filter((s) => s.signal_type?.includes("WARNING") || s.severity === "HIGH").length,
+      })
+    } catch {
+      showError("시그널 데이터를 불러오지 못했습니다")
+    } finally {
+      setLoading(false)
+    }
+  }, [token, filterSymbol])
 
   useEffect(() => {
-    if (!user?.user_id || !token) return
+    loadSignals()
+    const timer = setInterval(loadSignals, 60_000)
+    return () => clearInterval(timer)
+  }, [loadSignals])
 
-    const fetchAIData = async () => {
-      try {
-        // Fetch risk profile
-        const profileRes = await fetch(`${API_BASE}/api/user/${user.user_id}/risk-profile`, {
-          headers: { Authorization: `Bearer ${token}` },
-        })
-        if (profileRes.ok) {
-          const data = await profileRes.json()
-          setRiskProfile(data)
-        }
-
-        // Fetch recommendations
-        const recsRes = await fetch(`${API_BASE}/api/recommendations/${user.user_id}?limit=5`, {
-          headers: { Authorization: `Bearer ${token}` },
-        })
-        if (recsRes.ok) {
-          const data = await recsRes.json()
-          setRecommendations(data.recommendations)
-        }
-
-        // Fetch patterns
-        const patternsRes = await fetch(`${API_BASE}/api/patterns/${selectedSymbol}`, {
-          headers: { Authorization: `Bearer ${token}` },
-        })
-        if (patternsRes.ok) {
-          const data = await patternsRes.json()
-          setPatterns(data.patterns)
-        }
-
-        // Fetch anomalies
-        const anomaliesRes = await fetch(`${API_BASE}/api/anomalies/${selectedSymbol}`, {
-          headers: { Authorization: `Bearer ${token}` },
-        })
-        if (anomaliesRes.ok) {
-          const data = await anomaliesRes.json()
-          setAnomalies(data.anomalies)
-        }
-
-        // Fetch predictions
-        const predictionsRes = await fetch(`${API_BASE}/api/predictions/${selectedSymbol}`, {
-          headers: { Authorization: `Bearer ${token}` },
-          method: "POST",
-        })
-        if (predictionsRes.ok) {
-          const data = await predictionsRes.json()
-          setPredictions(data.predictions)
-        }
-      } catch (err) {
-        console.error("Failed to load AI data", err)
-      } finally {
-        setLoading(false)
-      }
-    }
-
-    fetchAIData()
-  }, [user, token, selectedSymbol])
-
-  if (loading) {
-    return <div className="min-h-screen bg-background p-6 animate-pulse" />
-  }
-
-  const getRiskProfileColor = (profile: string) => {
-    switch (profile) {
-      case "aggressive":
-        return "text-red-600"
-      case "moderate":
-        return "text-yellow-600"
-      case "conservative":
-        return "text-green-600"
-      default:
-        return "text-gray-600"
+  const handleScan = async () => {
+    setScanning(true)
+    try {
+      const res = await fetch(`${API_BASE}/api/scan/run`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      if (!res.ok) throw new Error("스캔 실패")
+      const data = await res.json()
+      setLastScan(new Date().toLocaleTimeString("ko-KR"))
+      success(`스캔 완료 — ${data.scanned}개 종목, ${data.count}개 시그널`)
+      await loadSignals()
+    } catch {
+      showError("스캔에 실패했습니다")
+    } finally {
+      setScanning(false)
     }
   }
 
-  const getRiskProfileBg = (profile: string) => {
-    switch (profile) {
-      case "aggressive":
-        return "bg-red-500/10 border-red-500/30"
-      case "moderate":
-        return "bg-yellow-500/10 border-yellow-500/30"
-      case "conservative":
-        return "bg-green-500/10 border-green-500/30"
-      default:
-        return "bg-gray-500/10 border-gray-500/30"
-    }
+  const filtered = filterSymbol
+    ? signals.filter((s) => s.symbol?.toUpperCase().includes(filterSymbol.toUpperCase()))
+    : signals
+
+  const formatTime = (s: Signal) => {
+    const ts = s.created_at || s.timestamp
+    if (!ts) return ""
+    try {
+      return new Date(ts).toLocaleString("ko-KR", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })
+    } catch { return ts }
   }
 
   return (
     <div className="min-h-screen bg-background p-6">
       <div className="max-w-7xl mx-auto">
         <AnimateIn from="bottom">
-          <div className="mb-8">
-            <h1 className="text-3xl font-bold mb-2 flex items-center gap-2">
-              <Zap className="w-8 h-8 text-yellow-500" />
-              AI 신호 분석
-            </h1>
-            <p className="text-muted-foreground">
-              머신러닝 기반 신호 추천 및 시장 패턴 감지
-            </p>
+          <div className="mb-8 flex items-center justify-between flex-wrap gap-4">
+            <div>
+              <h1 className="text-3xl font-bold mb-1">시그널 피드</h1>
+              <p className="text-muted-foreground text-sm">
+                스캔 엔진에서 감지된 실제 시그널 · 1분 자동갱신
+                {lastScan && <span className="ml-2">마지막 스캔: {lastScan}</span>}
+              </p>
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={loadSignals}
+                disabled={loading}
+                className="p-2 hover:bg-muted rounded-lg transition-all"
+                title="새로고침"
+              >
+                <RefreshCw size={18} className={loading ? "animate-spin text-blue-600" : ""} />
+              </button>
+              <button
+                onClick={handleScan}
+                disabled={scanning}
+                className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white px-5 py-2 rounded-lg font-bold transition-all disabled:opacity-50"
+              >
+                {scanning ? (
+                  <RefreshCw size={16} className="animate-spin" />
+                ) : (
+                  <Play size={16} />
+                )}
+                {scanning ? "스캔 중..." : "지금 스캔"}
+              </button>
+            </div>
           </div>
         </AnimateIn>
 
-        {/* Risk Profile Card */}
-        {riskProfile && (
-          <AnimateIn from="bottom" delay={40}>
-            <div
-              className={`mb-6 border rounded-lg p-6 ${getRiskProfileBg(
-                riskProfile.risk_profile
-              )}`}
-            >
-              <h3 className="font-bold mb-3 flex items-center gap-2">
-                <Lightbulb className="w-5 h-5" />
-                투자자 성향 분석
-              </h3>
-              <div className="grid grid-cols-3 gap-4">
-                <div>
-                  <p className="text-xs text-muted-foreground mb-1">위험 성향</p>
-                  <p className={`font-semibold text-lg ${getRiskProfileColor(riskProfile.risk_profile)}`}>
-                    {riskProfile.risk_profile === "aggressive"
-                      ? "공격적"
-                      : riskProfile.risk_profile === "moderate"
-                      ? "중도적"
-                      : "보수적"}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground mb-1">경험 수준</p>
-                  <p className="font-semibold text-lg">
-                    {riskProfile.experience_level === "expert"
-                      ? "전문가"
-                      : riskProfile.experience_level === "intermediate"
-                      ? "중급"
-                      : "초급"}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground mb-1">평균 ROI</p>
-                  <p className={`font-semibold text-lg ${riskProfile.avg_roi > 0 ? "text-green-600" : "text-red-600"}`}>
-                    {riskProfile.avg_roi.toFixed(2)}%
-                  </p>
-                </div>
-              </div>
-            </div>
-          </AnimateIn>
-        )}
-
-        {/* Symbol Selection */}
+        {/* 통계 */}
         <AnimateIn from="bottom" delay={80}>
-          <div className="mb-6">
-            <label className="block text-sm font-medium mb-2">분석 심볼</label>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+            {[
+              { label: "총 시그널", value: stats.total, color: "text-foreground" },
+              { label: "매수", value: stats.buy, color: "text-green-600" },
+              { label: "매도", value: stats.sell, color: "text-red-600" },
+              { label: "경고", value: stats.warning, color: "text-yellow-600" },
+            ].map(({ label, value, color }) => (
+              <div key={label} className="bg-card border border-border rounded-lg p-5">
+                <p className="text-sm text-muted-foreground mb-1">{label}</p>
+                <p className={`text-3xl font-bold ${color}`}>{value}</p>
+              </div>
+            ))}
+          </div>
+        </AnimateIn>
+
+        {/* 필터 */}
+        <AnimateIn from="bottom" delay={120}>
+          <div className="bg-card border border-border rounded-lg p-4 mb-4">
             <input
               type="text"
-              value={selectedSymbol}
-              onChange={(e) => setSelectedSymbol(e.target.value.toUpperCase())}
-              placeholder="QQQ"
-              className="w-full md:w-48 px-3 py-2 bg-muted border border-border rounded-lg"
+              placeholder="종목 심볼로 필터 (예: AAPL)"
+              value={filterSymbol}
+              onChange={(e) => setFilterSymbol(e.target.value.toUpperCase())}
+              className="w-full max-w-xs px-4 py-2 bg-muted border border-border rounded-lg text-foreground"
             />
           </div>
         </AnimateIn>
 
-        {/* ML Predictions */}
-        {predictions && (
-          <AnimateIn from="bottom" delay={120}>
-            <div className="mb-6 bg-card border border-border rounded-lg p-6">
-              <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
-                <TrendingUp className="w-5 h-5 text-blue-500" />
-                ML 예측 분석
-              </h3>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="p-4 bg-muted/50 rounded">
-                  <p className="text-xs text-muted-foreground mb-1">추천 진입가</p>
-                  <p className="text-2xl font-bold text-green-600">
-                    ${predictions.entry_price?.toFixed(2) || "—"}
-                  </p>
-                </div>
-                <div className="p-4 bg-muted/50 rounded">
-                  <p className="text-xs text-muted-foreground mb-1">추천 진출가</p>
-                  <p className="text-2xl font-bold text-blue-600">
-                    ${predictions.exit_price?.toFixed(2) || "—"}
-                  </p>
-                </div>
-                <div className="p-4 bg-muted/50 rounded">
-                  <p className="text-xs text-muted-foreground mb-1">예측 신뢰도</p>
-                  <p className="text-2xl font-bold text-purple-600">
-                    {predictions.confidence?.toFixed(0) || "—"}%
-                  </p>
-                </div>
-              </div>
-              <p className="text-xs text-muted-foreground mt-3">
-                모델: {predictions.model_type}
+        {/* 시그널 목록 */}
+        <AnimateIn from="bottom" delay={160}>
+          {loading ? (
+            <div className="text-center py-16 text-muted-foreground">
+              <RefreshCw className="animate-spin mx-auto mb-2" size={24} />
+              <p>로딩 중...</p>
+            </div>
+          ) : filtered.length === 0 ? (
+            <div className="bg-card border border-border rounded-lg p-12 text-center">
+              <Zap className="mx-auto mb-4 text-muted-foreground opacity-40" size={48} />
+              <p className="text-muted-foreground mb-2">
+                {filterSymbol ? `${filterSymbol}에 대한 시그널이 없습니다` : "최근 7일간 시그널이 없습니다"}
               </p>
+              <p className="text-sm text-muted-foreground mb-4">
+                &quot;지금 스캔&quot; 버튼으로 워치리스트를 스캔하세요
+              </p>
+              <button
+                onClick={handleScan}
+                disabled={scanning}
+                className="px-6 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg font-bold flex items-center gap-2 mx-auto"
+              >
+                <Play size={16} />
+                스캔 시작
+              </button>
             </div>
-          </AnimateIn>
-        )}
-
-        {/* Chart Patterns */}
-        {patterns.length > 0 && (
-          <AnimateIn from="bottom" delay={160}>
-            <div className="mb-6 bg-card border border-border rounded-lg p-6">
-              <h3 className="text-lg font-bold mb-4">감지된 차트 패턴</h3>
-              <div className="space-y-3">
-                {patterns.map((pattern, idx) => (
-                  <div key={idx} className="flex items-start justify-between p-3 bg-muted/30 rounded">
-                    <div>
-                      <p className="font-semibold capitalize">
-                        {pattern.type.replace(/_/g, " ")}
-                      </p>
-                      <p className="text-sm text-muted-foreground">
-                        신호: <span className="capitalize">{pattern.signal}</span>
-                      </p>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-sm font-semibold">{pattern.confidence}% 신뢰도</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </AnimateIn>
-        )}
-
-        {/* Market Anomalies */}
-        {anomalies.length > 0 && (
-          <AnimateIn from="bottom" delay={200}>
-            <div className="mb-6 bg-card border border-border rounded-lg p-6">
-              <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
-                <AlertTriangle className="w-5 h-5 text-orange-500" />
-                시장 이상치 감지
-              </h3>
-              <div className="space-y-3">
-                {anomalies.map((anomaly, idx) => (
-                  <div
-                    key={idx}
-                    className={`p-3 rounded border ${
-                      anomaly.severity === "high"
-                        ? "bg-red-500/10 border-red-500/30"
-                        : anomaly.severity === "medium"
-                        ? "bg-yellow-500/10 border-yellow-500/30"
-                        : "bg-blue-500/10 border-blue-500/30"
-                    }`}
-                  >
-                    <p className="font-semibold capitalize">
-                      {anomaly.type.replace(/_/g, " ")}
-                    </p>
-                    <p className="text-sm text-muted-foreground">{anomaly.message}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </AnimateIn>
-        )}
-
-        {/* AI Recommendations */}
-        {recommendations.length > 0 && (
-          <AnimateIn from="bottom" delay={240}>
-            <div className="bg-card border border-border rounded-lg p-6">
-              <h3 className="text-lg font-bold mb-4">AI 추천 신호 (Top 5)</h3>
-              <div className="space-y-3">
-                {recommendations.map((signal, idx) => (
-                  <div key={idx} className="flex items-start justify-between p-4 bg-muted/30 rounded">
-                    <div>
-                      <p className="font-bold">{signal.symbol}</p>
-                      <p className="text-sm text-muted-foreground">{signal.message}</p>
-                      <p className="text-xs text-muted-foreground mt-1">
-                        매칭 점수: {signal.matched_score?.toFixed(0) || signal.confidence_score}점
-                      </p>
-                    </div>
-                    <div className="text-right flex flex-col items-end">
-                      <div className="w-12 h-12 rounded-full bg-primary/20 flex items-center justify-center">
-                        <span className="font-bold text-sm">
-                          {(signal.matched_score || signal.confidence_score).toFixed(0)}
-                        </span>
+          ) : (
+            <div className="space-y-3">
+              {filtered.map((sig, idx) => (
+                <div
+                  key={sig.id || idx}
+                  className={`bg-card border rounded-lg p-5 transition-colors hover:border-blue-600 ${
+                    SEVERITY_STYLE[sig.severity || "LOW"] || "border-border"
+                  }`}
+                >
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex items-start gap-3 flex-1">
+                      <div className="mt-1">
+                        {SIGNAL_ICON[sig.signal_type] || <Zap size={16} className="text-blue-600" />}
                       </div>
-                      <p className="text-xs text-muted-foreground mt-2">신뢰도</p>
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 flex-wrap mb-1">
+                          <span className="text-lg font-bold">{sig.symbol}</span>
+                          <span className="px-2 py-0.5 rounded text-xs font-semibold bg-muted">
+                            {sig.signal_type}
+                          </span>
+                          {sig.severity && (
+                            <span className={`px-2 py-0.5 rounded text-xs font-semibold border ${SEVERITY_STYLE[sig.severity] || ""}`}>
+                              {sig.severity}
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-sm text-muted-foreground">{sig.message}</p>
+                        <div className="flex items-center gap-4 mt-2 text-xs text-muted-foreground">
+                          {sig.price && <span>가격: ${sig.price.toFixed(2)}</span>}
+                          <span>{formatTime(sig)}</span>
+                        </div>
+                      </div>
                     </div>
+                    <Link
+                      href={`/dashboard/charts?symbol=${sig.symbol}`}
+                      className="p-2 hover:bg-muted rounded-lg text-blue-600 shrink-0"
+                      title="차트 보기"
+                    >
+                      <BarChart2 size={16} />
+                    </Link>
                   </div>
-                ))}
-              </div>
+                </div>
+              ))}
             </div>
-          </AnimateIn>
-        )}
+          )}
+        </AnimateIn>
+
+        <ToastContainer toasts={toasts} onRemove={removeToast} />
       </div>
     </div>
   )

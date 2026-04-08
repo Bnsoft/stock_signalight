@@ -1,182 +1,238 @@
 "use client"
 
-import { useState, useEffect } from "react"
-import { useAuth } from "@/context/AuthContext"
+import { useState, useEffect, useRef, useCallback } from "react"
+import { useSearchParams } from "next/navigation"
 import { AnimateIn } from "@/components/layout/AnimateIn"
-import {
-  TrendingUp,
-  Download,
-  Share2,
-  Maximize2,
-  Settings,
-  X,
-} from "lucide-react"
+import { RefreshCw, TrendingUp } from "lucide-react"
 import { useToast } from "@/hooks/useToast"
 import { ToastContainer } from "@/components/ToastContainer"
 
-interface ChartData {
-  symbol: string
-  price: number
+interface Candle {
+  timestamp: string
   open: number
   high: number
   low: number
   close: number
   volume: number
-  change: number
-  changePercent: number
-  timestamp: string
+}
+
+interface Indicators {
+  current_price?: number
+  rsi_14?: number
+  macd?: number
+  macd_signal?: number
+  bollinger_upper?: number
+  bollinger_lower?: number
+  ma_20?: number
+  ma_50?: number
+  [key: string]: number | undefined
 }
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"
 
-const timeframes = [
-  { id: "1m", label: "1분" },
-  { id: "5m", label: "5분" },
-  { id: "15m", label: "15분" },
-  { id: "1h", label: "1시간" },
-  { id: "4h", label: "4시간" },
-  { id: "1d", label: "일봉" },
-  { id: "1w", label: "주봉" },
-  { id: "1M", label: "월봉" },
-]
-
-const indicators = [
-  "SMA",
-  "EMA",
-  "RSI",
-  "MACD",
-  "Bollinger Bands",
-  "ATR",
-  "Stochastic",
-  "Volume",
+const TIMEFRAMES = [
+  { id: "1m",  label: "1분",  period: "1d"  },
+  { id: "5m",  label: "5분",  period: "5d"  },
+  { id: "15m", label: "15분", period: "5d"  },
+  { id: "1h",  label: "1시간", period: "1mo" },
+  { id: "1d",  label: "일봉",  period: "6mo" },
+  { id: "1wk", label: "주봉",  period: "2y"  },
+  { id: "1mo", label: "월봉",  period: "5y"  },
 ]
 
 export default function ChartsPage() {
-  const { token } = useAuth()
-  const { toasts, removeToast, success, error: showError } = useToast()
+  const searchParams = useSearchParams()
+  const { toasts, removeToast, error: showError } = useToast()
 
-  const [symbol, setSymbol] = useState("AAPL")
-  const [selectedTimeframe, setSelectedTimeframe] = useState("1d")
-  const [selectedIndicators, setSelectedIndicators] = useState<string[]>([
-    "SMA",
-    "RSI",
-  ])
-  const [chartData, setChartData] = useState<ChartData | null>(null)
+  const [symbol, setSymbol] = useState(searchParams.get("symbol") || "AAPL")
+  const [inputSymbol, setInputSymbol] = useState(searchParams.get("symbol") || "AAPL")
+  const [timeframe, setTimeframe] = useState("1d")
+  const [candles, setCandles] = useState<Candle[]>([])
+  const [indicators, setIndicators] = useState<Indicators>({})
   const [loading, setLoading] = useState(false)
-  const [showSettings, setShowSettings] = useState(false)
+  const [lastUpdate, setLastUpdate] = useState<string>("")
+  const chartRef = useRef<HTMLDivElement>(null)
+  const chartInstanceRef = useRef<any>(null)
 
-  useEffect(() => {
-    loadChartData()
-  }, [symbol, selectedTimeframe])
+  const tf = TIMEFRAMES.find((t) => t.id === timeframe) || TIMEFRAMES[4]
 
-  const loadChartData = async () => {
+  const loadChart = useCallback(async (sym: string, tf_id: string) => {
+    setLoading(true)
     try {
-      setLoading(true)
+      const t = TIMEFRAMES.find((t) => t.id === tf_id) || TIMEFRAMES[4]
+      const [chartRes, quoteRes] = await Promise.all([
+        fetch(`${API_BASE}/api/chart/${sym}?interval=${tf_id}&period=${t.period}`),
+        fetch(`${API_BASE}/api/quote/${sym}`),
+      ])
 
-      const response = await fetch(
-        `${API_BASE}/api/charts/candles/${symbol}?timeframe=${selectedTimeframe}`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      )
+      if (!chartRes.ok) throw new Error("차트 데이터 없음")
 
-      if (!response.ok) throw new Error("Failed to load chart data")
+      const chartData = await chartRes.json()
+      setCandles(chartData.candles || [])
 
-      const data = await response.json()
-      setChartData(data.data)
-    } catch (err) {
-      showError("차트 데이터를 로드할 수 없습니다")
-      console.error(err)
+      if (quoteRes.ok) {
+        const quoteData = await quoteRes.json()
+        setIndicators(quoteData.indicators || {})
+      }
+
+      setLastUpdate(new Date().toLocaleTimeString("ko-KR"))
+    } catch (e: any) {
+      showError(e.message || "데이터 로드 실패")
     } finally {
       setLoading(false)
     }
+  }, [])
+
+  useEffect(() => {
+    loadChart(symbol, timeframe)
+  }, [symbol, timeframe, loadChart])
+
+  // Render lightweight-charts candle chart
+  useEffect(() => {
+    if (!chartRef.current || candles.length === 0) return
+
+    let chart: any = null
+
+    const render = async () => {
+      const { createChart, CandlestickSeries, HistogramSeries } = await import("lightweight-charts")
+
+      // Destroy previous instance
+      if (chartInstanceRef.current) {
+        chartInstanceRef.current.remove()
+        chartInstanceRef.current = null
+      }
+
+      const isDark = document.documentElement.classList.contains("dark")
+
+      chart = createChart(chartRef.current!, {
+        width: chartRef.current!.clientWidth,
+        height: 420,
+        layout: {
+          background: { color: "transparent" },
+          textColor: isDark ? "#e5e7eb" : "#1f2937",
+        },
+        grid: {
+          vertLines: { color: isDark ? "#374151" : "#e5e7eb" },
+          horzLines: { color: isDark ? "#374151" : "#e5e7eb" },
+        },
+        crosshair: { mode: 1 },
+        timeScale: { borderColor: isDark ? "#4b5563" : "#d1d5db" },
+      })
+
+      chartInstanceRef.current = chart
+
+      const candleSeries = chart.addSeries(CandlestickSeries, {
+        upColor: "#22c55e",
+        downColor: "#ef4444",
+        borderVisible: false,
+        wickUpColor: "#22c55e",
+        wickDownColor: "#ef4444",
+      })
+
+      const volumeSeries = chart.addSeries(HistogramSeries, {
+        color: "#3b82f6",
+        priceFormat: { type: "volume" },
+        priceScaleId: "volume",
+      })
+      chart.priceScale("volume").applyOptions({
+        scaleMargins: { top: 0.8, bottom: 0 },
+      })
+
+      const candleData = candles.map((c) => ({
+        time: c.timestamp.split("T")[0],
+        open: c.open,
+        high: c.high,
+        low: c.low,
+        close: c.close,
+      }))
+
+      const volumeData = candles.map((c) => ({
+        time: c.timestamp.split("T")[0],
+        value: c.volume,
+        color: c.close >= c.open ? "#22c55e44" : "#ef444444",
+      }))
+
+      candleSeries.setData(candleData)
+      volumeSeries.setData(volumeData)
+      chart.timeScale().fitContent()
+
+      // Resize observer
+      const ro = new ResizeObserver(() => {
+        if (chartRef.current) {
+          chart.applyOptions({ width: chartRef.current.clientWidth })
+        }
+      })
+      ro.observe(chartRef.current!)
+    }
+
+    render()
+
+    return () => {
+      if (chartInstanceRef.current) {
+        chartInstanceRef.current.remove()
+        chartInstanceRef.current = null
+      }
+    }
+  }, [candles])
+
+  const handleSearch = () => {
+    const sym = inputSymbol.trim().toUpperCase()
+    if (sym) setSymbol(sym)
   }
 
-  const toggleIndicator = (indicator: string) => {
-    setSelectedIndicators((prev) =>
-      prev.includes(indicator)
-        ? prev.filter((i) => i !== indicator)
-        : [...prev, indicator]
-    )
-  }
-
-  const handleDownloadChart = () => {
-    success("차트가 다운로드되었습니다")
-  }
-
-  const handleShareChart = () => {
-    success("공유 링크가 생성되었습니다")
-  }
+  const latest = candles.length > 0 ? candles[candles.length - 1] : null
+  const prev = candles.length > 1 ? candles[candles.length - 2] : null
+  const change = latest && prev ? latest.close - prev.close : 0
+  const changePct = prev ? (change / prev.close) * 100 : 0
 
   return (
     <div className="min-h-screen bg-background p-6">
       <div className="max-w-7xl mx-auto">
         <AnimateIn from="bottom">
-          <div className="mb-8">
-            <h1 className="text-3xl font-bold mb-2">고급 차트</h1>
-            <p className="text-muted-foreground">
-              기술적 지표를 활용한 심화 분석
-            </p>
+          <div className="mb-6">
+            <h1 className="text-3xl font-bold mb-1">차트 분석</h1>
+            <p className="text-muted-foreground text-sm">yfinance 실제 데이터 · 15분 지연</p>
           </div>
         </AnimateIn>
 
-        {/* 컨트롤 바 */}
+        {/* 검색 & 타임프레임 */}
         <AnimateIn from="bottom" delay={80}>
-          <div className="bg-card border border-border rounded-lg p-6 mb-6">
-            <div className="flex items-center justify-between gap-4 mb-4">
-              <div className="flex items-center gap-2 flex-1">
-                <input
-                  type="text"
-                  placeholder="종목 심볼 (예: AAPL)"
-                  value={symbol}
-                  onChange={(e) => setSymbol(e.target.value.toUpperCase())}
-                  className="px-4 py-2 bg-muted border border-border rounded-lg text-foreground flex-1 max-w-xs"
-                />
-              </div>
-
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={handleDownloadChart}
-                  className="p-2 hover:bg-muted rounded-lg transition-all"
-                  title="다운로드"
-                >
-                  <Download size={18} />
-                </button>
-                <button
-                  onClick={handleShareChart}
-                  className="p-2 hover:bg-muted rounded-lg transition-all"
-                  title="공유"
-                >
-                  <Share2 size={18} />
-                </button>
-                <button
-                  className="p-2 hover:bg-muted rounded-lg transition-all"
-                  title="확대"
-                >
-                  <Maximize2 size={18} />
-                </button>
-                <button
-                  onClick={() => setShowSettings(!showSettings)}
-                  className={`p-2 rounded-lg transition-all ${
-                    showSettings ? "bg-blue-600/20 text-blue-600" : "hover:bg-muted"
-                  }`}
-                  title="설정"
-                >
-                  <Settings size={18} />
-                </button>
-              </div>
+          <div className="bg-card border border-border rounded-lg p-4 mb-4">
+            <div className="flex items-center gap-3 mb-4">
+              <input
+                type="text"
+                value={inputSymbol}
+                onChange={(e) => setInputSymbol(e.target.value.toUpperCase())}
+                onKeyDown={(e) => e.key === "Enter" && handleSearch()}
+                placeholder="심볼 입력 (AAPL, SPY, QQQ...)"
+                className="flex-1 max-w-xs px-4 py-2 bg-muted border border-border rounded-lg text-foreground"
+              />
+              <button
+                onClick={handleSearch}
+                className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg"
+              >
+                조회
+              </button>
+              <button
+                onClick={() => loadChart(symbol, timeframe)}
+                disabled={loading}
+                className="p-2 hover:bg-muted rounded-lg"
+                title="새로고침"
+              >
+                <RefreshCw size={16} className={loading ? "animate-spin text-blue-600" : ""} />
+              </button>
+              {lastUpdate && (
+                <span className="text-xs text-muted-foreground">업데이트: {lastUpdate}</span>
+              )}
             </div>
 
-            {/* 타임프레임 선택 */}
-            <div className="flex gap-2 overflow-x-auto pb-2">
-              {timeframes.map(({ id, label }) => (
+            <div className="flex gap-2 flex-wrap">
+              {TIMEFRAMES.map(({ id, label }) => (
                 <button
                   key={id}
-                  onClick={() => setSelectedTimeframe(id)}
-                  className={`px-3 py-1 rounded-lg font-semibold whitespace-nowrap transition-all ${
-                    selectedTimeframe === id
+                  onClick={() => setTimeframe(id)}
+                  className={`px-3 py-1 rounded-lg text-sm font-semibold transition-all ${
+                    timeframe === id
                       ? "bg-blue-600 text-white"
                       : "bg-muted hover:bg-muted/80 text-foreground"
                   }`}
@@ -185,154 +241,85 @@ export default function ChartsPage() {
                 </button>
               ))}
             </div>
+          </div>
+        </AnimateIn>
 
-            {/* 지표 설정 */}
-            {showSettings && (
-              <div className="mt-4 pt-4 border-t border-border">
-                <p className="text-sm font-semibold mb-3">기술적 지표</p>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-                  {indicators.map((indicator) => (
-                    <label
-                      key={indicator}
-                      className="flex items-center gap-2 cursor-pointer"
-                    >
-                      <input
-                        type="checkbox"
-                        checked={selectedIndicators.includes(indicator)}
-                        onChange={() => toggleIndicator(indicator)}
-                        className="rounded"
-                      />
-                      <span className="text-sm">{indicator}</span>
-                    </label>
-                  ))}
+        {/* 가격 헤더 */}
+        {latest && (
+          <AnimateIn from="bottom" delay={120}>
+            <div className="bg-card border border-border rounded-lg p-4 mb-4 flex items-center justify-between">
+              <div>
+                <span className="text-2xl font-bold">{symbol}</span>
+                <span className="text-sm text-muted-foreground ml-2">{tf.label}</span>
+              </div>
+              <div className="text-right">
+                <p className="text-3xl font-bold">${latest.close.toFixed(2)}</p>
+                <p className={`text-sm font-semibold ${change >= 0 ? "text-green-600" : "text-red-600"}`}>
+                  {change >= 0 ? "▲" : "▼"} {Math.abs(change).toFixed(2)} ({changePct >= 0 ? "+" : ""}{changePct.toFixed(2)}%)
+                </p>
+              </div>
+              <div className="hidden md:grid grid-cols-4 gap-6 text-sm">
+                {[
+                  { label: "시가", value: `$${latest.open.toFixed(2)}` },
+                  { label: "고가", value: `$${latest.high.toFixed(2)}`, color: "text-green-600" },
+                  { label: "저가", value: `$${latest.low.toFixed(2)}`, color: "text-red-600" },
+                  { label: "거래량", value: `${(latest.volume / 1_000_000).toFixed(1)}M` },
+                ].map(({ label, value, color }) => (
+                  <div key={label}>
+                    <p className="text-muted-foreground">{label}</p>
+                    <p className={`font-bold ${color || ""}`}>{value}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </AnimateIn>
+        )}
+
+        {/* 캔들 차트 */}
+        <AnimateIn from="bottom" delay={160}>
+          <div className="bg-card border border-border rounded-lg p-4 mb-4">
+            {loading ? (
+              <div className="flex items-center justify-center h-[420px] text-muted-foreground">
+                <div className="text-center">
+                  <RefreshCw className="animate-spin mx-auto mb-2" size={24} />
+                  <p>데이터 로딩 중...</p>
                 </div>
               </div>
+            ) : candles.length === 0 ? (
+              <div className="flex items-center justify-center h-[420px] text-muted-foreground">
+                <div className="text-center">
+                  <TrendingUp className="mx-auto mb-2 opacity-40" size={48} />
+                  <p>데이터 없음</p>
+                </div>
+              </div>
+            ) : (
+              <div ref={chartRef} className="w-full" />
             )}
           </div>
         </AnimateIn>
 
-        {/* 차트 영역 */}
-        <AnimateIn from="bottom" delay={160}>
-          <div className="bg-card border border-border rounded-lg overflow-hidden">
-            <div className="p-6 min-h-[500px] flex flex-col">
-              {loading ? (
-                <div className="flex items-center justify-center h-full">
-                  <p className="text-muted-foreground">로딩 중...</p>
-                </div>
-              ) : chartData ? (
-                <>
-                  {/* 차트 헤더 */}
-                  <div className="mb-6">
-                    <div className="flex items-center justify-between mb-2">
-                      <div>
-                        <h3 className="text-2xl font-bold">{chartData.symbol}</h3>
-                        <p className="text-muted-foreground">
-                          {chartData.timestamp}
-                        </p>
-                      </div>
-                      <div className="text-right">
-                        <p className="text-3xl font-bold">
-                          ${chartData.price.toFixed(2)}
-                        </p>
-                        <p
-                          className={`text-lg font-semibold ${
-                            chartData.changePercent >= 0
-                              ? "text-green-600"
-                              : "text-red-600"
-                          }`}
-                        >
-                          {chartData.changePercent >= 0 ? "+" : ""}
-                          {chartData.changePercent.toFixed(2)}%
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* 차트 플레이스홀더 */}
-                  <div className="flex-1 bg-muted rounded-lg p-4 flex items-center justify-center">
-                    <div className="text-center text-muted-foreground">
-                      <TrendingUp
-                        className="mx-auto mb-2 opacity-50"
-                        size={48}
-                      />
-                      <p>Lightweight Charts 라이브러리로 렌더링됩니다</p>
-                      <p className="text-xs mt-2">
-                        지표: {selectedIndicators.join(", ")}
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* 차트 정보 */}
-                  <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mt-6">
-                    <div>
-                      <p className="text-xs text-muted-foreground mb-1">시가</p>
-                      <p className="text-lg font-bold">
-                        ${chartData.open.toFixed(2)}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-muted-foreground mb-1">고가</p>
-                      <p className="text-lg font-bold text-green-600">
-                        ${chartData.high.toFixed(2)}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-muted-foreground mb-1">저가</p>
-                      <p className="text-lg font-bold text-red-600">
-                        ${chartData.low.toFixed(2)}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-muted-foreground mb-1">종가</p>
-                      <p className="text-lg font-bold">
-                        ${chartData.close.toFixed(2)}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-muted-foreground mb-1">거래량</p>
-                      <p className="text-lg font-bold">
-                        {(chartData.volume / 1000000).toFixed(1)}M
-                      </p>
-                    </div>
-                  </div>
-                </>
-              ) : (
-                <div className="flex items-center justify-center h-full">
-                  <p className="text-muted-foreground">
-                    차트 데이터를 로드할 수 없습니다
-                  </p>
-                </div>
-              )}
-            </div>
-          </div>
-        </AnimateIn>
-
-        {/* 선택된 지표 정보 */}
-        {selectedIndicators.length > 0 && (
+        {/* 기술적 지표 */}
+        {Object.keys(indicators).length > 0 && (
           <AnimateIn from="bottom" delay={240}>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mt-6">
-              {selectedIndicators.map((indicator) => (
-                <div
-                  key={indicator}
-                  className="bg-card border border-border rounded-lg p-4"
-                >
-                  <div className="flex items-center justify-between mb-2">
-                    <h4 className="font-bold">{indicator}</h4>
-                    <button
-                      onClick={() => toggleIndicator(indicator)}
-                      className="p-1 hover:bg-muted rounded transition-all"
-                    >
-                      <X size={16} />
-                    </button>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              {[
+                { key: "rsi_14", label: "RSI (14)", format: (v: number) => v.toFixed(1),
+                  color: (v: number) => v > 70 ? "text-red-600" : v < 30 ? "text-green-600" : "" },
+                { key: "macd", label: "MACD", format: (v: number) => v.toFixed(3),
+                  color: (v: number) => v >= 0 ? "text-green-600" : "text-red-600" },
+                { key: "bollinger_upper", label: "BB 상단", format: (v: number) => `$${v.toFixed(2)}`, color: () => "" },
+                { key: "bollinger_lower", label: "BB 하단", format: (v: number) => `$${v.toFixed(2)}`, color: () => "" },
+                { key: "ma_20", label: "MA 20", format: (v: number) => `$${v.toFixed(2)}`, color: () => "" },
+                { key: "ma_50", label: "MA 50", format: (v: number) => `$${v.toFixed(2)}`, color: () => "" },
+              ].filter(({ key }) => indicators[key] !== undefined && indicators[key] !== null).map(({ key, label, format, color }) => {
+                const val = indicators[key] as number
+                return (
+                  <div key={key} className="bg-card border border-border rounded-lg p-4">
+                    <p className="text-xs text-muted-foreground mb-1">{label}</p>
+                    <p className={`text-xl font-bold ${color(val)}`}>{format(val)}</p>
                   </div>
-                  <div className="text-sm text-muted-foreground">
-                    <p>값: -</p>
-                    <p className="text-xs mt-1">
-                      기술적 분석 데이터 표시
-                    </p>
-                  </div>
-                </div>
-              ))}
+                )
+              })}
             </div>
           </AnimateIn>
         )}
