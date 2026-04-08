@@ -6,7 +6,7 @@ import { AnimateIn } from "@/components/layout/AnimateIn"
 import { Save, Bell, Lock, User, Sliders, Database, AlertCircle } from "lucide-react"
 import { useToast } from "@/hooks/useToast"
 import { ToastContainer } from "@/components/ToastContainer"
-import { validateEmail, validateRequired, FormError } from "@/utils/validation"
+import { validateEmail, validateRequired } from "@/utils/validation"
 import { getErrorMessage } from "@/utils/validation"
 
 type SettingsTab = "profile" | "notifications" | "preferences" | "security" | "data"
@@ -20,7 +20,7 @@ export default function SettingsPage() {
   const [saving, setSaving] = useState(false)
   const [formErrors, setFormErrors] = useState<{ [key: string]: string }>({})
   const [profile, setProfile] = useState({
-    name: user?.name || "사용자",
+    name: user?.display_name || "사용자",
     email: user?.email || "",
     preferred_currency: "USD",
     timezone: "Asia/Seoul",

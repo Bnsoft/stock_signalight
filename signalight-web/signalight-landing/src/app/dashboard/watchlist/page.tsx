@@ -15,8 +15,8 @@ interface WatchlistItem {
   changePercent: number
   dayHigh: number
   dayLow: number
-  52WeekHigh: number
-  52WeekLow: number
+  "52WeekHigh": number
+  "52WeekLow": number
   addedDate: string
 }
 
@@ -34,8 +34,8 @@ export default function WatchlistPage() {
       changePercent: 1.36,
       dayHigh: 176.50,
       dayLow: 173.20,
-      52WeekHigh: 199.62,
-      52WeekLow: 164.08,
+      "52WeekHigh": 199.62,
+      "52WeekLow": 164.08,
       addedDate: "2026-03-15",
     },
     {
@@ -46,8 +46,8 @@ export default function WatchlistPage() {
       changePercent: -0.33,
       dayHigh: 383.50,
       dayLow: 377.40,
-      52WeekHigh: 416.00,
-      52WeekLow: 323.25,
+      "52WeekHigh": 416.00,
+      "52WeekLow": 323.25,
       addedDate: "2026-02-20",
     },
     {
@@ -58,8 +58,8 @@ export default function WatchlistPage() {
       changePercent: 2.29,
       dayHigh: 141.80,
       dayLow: 138.90,
-      52WeekHigh: 176.08,
-      52WeekLow: 102.21,
+      "52WeekHigh": 176.08,
+      "52WeekLow": 102.21,
       addedDate: "2026-04-01",
     },
   ])
@@ -89,8 +89,8 @@ export default function WatchlistPage() {
       changePercent: 1.01,
       dayHigh: 152.5,
       dayLow: 148.5,
-      52WeekHigh: 160.0,
-      52WeekLow: 120.0,
+      "52WeekHigh": 160.0,
+      "52WeekLow": 120.0,
       addedDate: new Date().toISOString().split("T")[0],
     }
 

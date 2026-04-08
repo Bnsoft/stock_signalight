@@ -18,6 +18,9 @@ interface Portfolio {
     quantity: number
     position_value: number
     position_return: number
+    position_cost?: number
+    avg_price?: number
+    current_price?: number
   }>
   sharpe_ratio: number
   max_drawdown: number
@@ -271,8 +274,8 @@ export default function PortfolioPage() {
                           <td className="py-3 px-4 font-mono font-semibold">{pos.symbol}</td>
                           <td className="text-right py-3 px-4">{pos.quantity.toLocaleString()}</td>
                           <td className="text-right py-3 px-4 font-mono">
-                            ${pos.position_cost / pos.quantity > 0
-                              ? (pos.position_cost / pos.quantity).toFixed(2)
+                            ${(pos.position_cost ?? 0) / pos.quantity > 0
+                              ? ((pos.position_cost ?? 0) / pos.quantity).toFixed(2)
                               : "0.00"}
                           </td>
                           <td className="text-right py-3 px-4 font-mono text-green-600 font-semibold">

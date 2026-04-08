@@ -102,7 +102,7 @@ export default function ComparePage() {
 
   const compareData = selectedSymbols.map((symbol) => MOCK_DATA[symbol]).filter(Boolean)
 
-  const metrics = [
+  const metrics: { label: string; key: string; format: (v: any) => string }[] = [
     { label: "현재 가격", key: "price", format: (v: number) => `$${v.toFixed(2)}` },
     { label: "P/E 비율", key: "pe", format: (v: number) => v.toFixed(2) },
     { label: "P/B 비율", key: "pb", format: (v: number) => v.toFixed(2) },

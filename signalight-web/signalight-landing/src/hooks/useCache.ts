@@ -54,7 +54,7 @@ export function useCache<T>(config?: CacheConfig) {
       ) {
         // 가장 오래된 항목 제거 (FIFO)
         const firstKey = cacheRef.current.keys().next().value
-        cacheRef.current.delete(firstKey)
+        if (firstKey !== undefined) cacheRef.current.delete(firstKey)
       }
 
       cacheRef.current.set(cacheKey, {

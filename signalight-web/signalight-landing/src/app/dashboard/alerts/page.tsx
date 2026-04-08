@@ -6,7 +6,7 @@ import { AnimateIn } from "@/components/layout/AnimateIn"
 import {
   Plus,
   Trash2,
-  Toggle2,
+  ToggleLeft,
   Clock,
   TrendingUp,
   TrendingDown,
@@ -86,7 +86,7 @@ export default function AlertsPage() {
   const loadAlerts = async () => {
     try {
       setLoading(true)
-      const cached = cache.get<Alert[]>(`/api/alerts`)
+      const cached = cache.get(`/api/alerts`) as Alert[] | null
       if (cached) {
         setAlerts(cached)
         return
@@ -421,7 +421,7 @@ export default function AlertsPage() {
                             }`}
                             title={alert.enabled ? "비활성화" : "활성화"}
                           >
-                            <Toggle2 size={18} />
+                            <ToggleLeft size={18} />
                           </button>
                           <button
                             onClick={() => handleDeleteAlert(alert.id)}

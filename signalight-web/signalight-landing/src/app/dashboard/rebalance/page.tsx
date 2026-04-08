@@ -14,6 +14,7 @@ interface RebalanceSuggestion {
     action: "buy" | "sell"
     quantity: number
     estimated_value: number
+    diff_pct?: number
   }>
   estimated_cost: number
 }
@@ -106,7 +107,7 @@ export default function RebalancePage() {
                           <td className="py-3 px-4 font-semibold">{trade.symbol}</td>
                           <td className="text-center py-3 px-4">{trade.current_pct.toFixed(1)}%</td>
                           <td className="text-center py-3 px-4">{trade.target_pct.toFixed(1)}%</td>
-                          <td className="text-center py-3 px-4">{trade.diff_pct.toFixed(1)}%</td>
+                          <td className="text-center py-3 px-4">{(trade.diff_pct ?? (trade.target_pct - trade.current_pct)).toFixed(1)}%</td>
                           <td className="text-center py-3 px-4">
                             <span
                               className={`px-2 py-1 rounded text-xs font-semibold ${

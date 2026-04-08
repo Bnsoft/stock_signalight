@@ -10,6 +10,8 @@ interface Signal {
   symbol: string
   signal_type: string
   confidence_score: number
+  confidence?: number
+  matched_score?: number
   message: string
   created_at: string
 }
