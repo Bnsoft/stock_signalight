@@ -112,13 +112,17 @@ async def run_scan(dry_run: bool = False) -> list[dict]:
             signals_found=len(all_signals),
             errors="; ".join(errors),
         )
-        interval = SIGNAL_CONFIG["scan_interval_minutes"]
-        await send_scan_summary(
-            total=len(wl),
-            signals_found=len(all_signals),
-            signal_list=all_signals,
-            next_scan_minutes=interval,
-        )
+        # Only notify Telegram when there are new signals — skip silent scans
+        if all_signals:
+            interval = SIGNAL_CONFIG["scan_interval_minutes"]
+            await send_scan_summary(
+                total=len(wl),
+                signals_found=len(all_signals),
+                signal_list=all_signals,
+                next_scan_minutes=interval,
+            )
+        else:
+            logger.info(f"Scan complete — {len(wl)} symbols, no signals (Telegram skipped)")
     else:
         logger.info(
             f"[DRY RUN] Scan complete — {len(wl)} symbols, "
