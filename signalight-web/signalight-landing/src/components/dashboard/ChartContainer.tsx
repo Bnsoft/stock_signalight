@@ -10,62 +10,107 @@ interface ChartContainerProps {
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"
 
-const PERIOD_TO_INTERVAL: Record<string, { interval: string; period: string }> = {
+const PERIOD_CONFIG: Record<string, { interval: string; period: string }> = {
   "1D": { interval: "5m",  period: "1d"  },
   "1W": { interval: "1h",  period: "5d"  },
   "1M": { interval: "1d",  period: "1mo" },
 }
 
-function calculateMA(data: any[], window: number) {
+function toChartTime(isoTimestamp: string, isIntraday: boolean): number | string {
+  const date = new Date(isoTimestamp)
+  if (isIntraday) {
+    // lightweight-charts expects Unix seconds for intraday
+    return Math.floor(date.getTime() / 1000)
+  }
+  // For daily: YYYY-MM-DD string
+  return isoTimestamp.split("T")[0]
+}
+
+function calculateMA(data: { time: any; close: number }[], window: number) {
   return data
-    .map((candle, idx) => {
+    .map((c, idx) => {
       if (idx < window - 1) return null
-      const sum = data.slice(idx - window + 1, idx + 1).reduce((a, c) => a + c.close, 0)
-      return { time: candle.time, value: parseFloat((sum / window).toFixed(2)) }
+      const sum = data.slice(idx - window + 1, idx + 1).reduce((a, x) => a + x.close, 0)
+      return { time: c.time, value: parseFloat((sum / window).toFixed(2)) }
     })
     .filter(Boolean) as { time: any; value: number }[]
 }
 
 export function ChartContainer({ symbol, period }: ChartContainerProps) {
   const containerRef = useRef<HTMLDivElement>(null)
-  const [error, setError] = useState("")
-  const [loading, setLoading] = useState(false)
+  const chartRef = useRef<any>(null)
+  const [status, setStatus] = useState<"loading" | "ok" | "error">("loading")
+  const [errorMsg, setErrorMsg] = useState("")
 
   useEffect(() => {
     if (!containerRef.current || !symbol) return
-    setError("")
-    setLoading(true)
 
-    const { interval, period: p } = PERIOD_TO_INTERVAL[period] || PERIOD_TO_INTERVAL["1D"]
+    setStatus("loading")
+    setErrorMsg("")
 
-    let cleanup: (() => void) | undefined
+    // Destroy previous chart
+    if (chartRef.current) {
+      chartRef.current.remove()
+      chartRef.current = null
+    }
 
-    const fetchAndRender = async () => {
+    const { interval, period: p } = PERIOD_CONFIG[period] || PERIOD_CONFIG["1D"]
+    const isIntraday = ["1m", "5m", "15m", "30m", "1h"].includes(interval)
+
+    let cancelled = false
+
+    const run = async () => {
       try {
         const res = await fetch(`${API_BASE}/api/chart/${symbol}?interval=${interval}&period=${p}`)
-        if (!res.ok) throw new Error(`차트 데이터 없음 (${res.status})`)
+        if (!res.ok) {
+          const msg = await res.text().catch(() => res.statusText)
+          throw new Error(`API 오류 ${res.status}: ${msg}`)
+        }
         const data = await res.json()
-        const candles: any[] = data.candles || []
-        if (candles.length === 0) throw new Error("데이터 없음")
+        const raw: any[] = data.candles || []
+        if (raw.length === 0) throw new Error("데이터 없음")
 
-        setLoading(false)
+        if (cancelled || !containerRef.current) return
 
-        if (!containerRef.current) return
+        // Transform to lightweight-charts format
+        const candles = raw
+          .map((c) => ({
+            time: toChartTime(c.timestamp, isIntraday),
+            open: c.open,
+            high: c.high,
+            low: c.low,
+            close: c.close,
+            volume: c.volume,
+          }))
+          // Sort ascending (required by lightweight-charts)
+          .sort((a, b) => (a.time as any) - (b.time as any))
 
-        const chart: any = createChart(containerRef.current, {
+        // Remove duplicate timestamps
+        const seen = new Set()
+        const deduped = candles.filter((c) => {
+          const key = String(c.time)
+          if (seen.has(key)) return false
+          seen.add(key)
+          return true
+        })
+
+        const chart: any = createChart(containerRef.current!, {
           layout: {
             background: { type: ColorType.Solid, color: "transparent" },
             textColor: "#9ca3af",
           },
           grid: {
-            vertLines: { color: "#1f2937" },
-            horzLines: { color: "#1f2937" },
+            vertLines: { color: "#1f293730" },
+            horzLines: { color: "#1f293730" },
           },
-          timeScale: { timeVisible: true, secondsVisible: false },
-          width: containerRef.current.clientWidth,
-          height: containerRef.current.clientHeight || 400,
+          crosshair: { mode: 1 },
+          timeScale: { timeVisible: true, secondsVisible: isIntraday },
+          width: containerRef.current!.clientWidth,
+          height: containerRef.current!.clientHeight || 360,
         })
+        chartRef.current = chart
 
+        // Candlestick
         const candleSeries = chart.addCandlestickSeries({
           upColor: "#10b981",
           downColor: "#ef4444",
@@ -74,78 +119,88 @@ export function ChartContainer({ symbol, period }: ChartContainerProps) {
           wickUpColor: "#10b981",
           wickDownColor: "#ef4444",
         })
-        candleSeries.setData(candles)
+        candleSeries.setData(deduped)
 
-        if (candles.length >= 20) {
-          const ma20 = calculateMA(candles, 20)
-          const ma20Series = chart.addLineSeries({ color: "#3b82f6", lineWidth: 1 })
-          ma20Series.setData(ma20)
+        // MA lines (only for daily+ data)
+        if (!isIntraday && deduped.length >= 20) {
+          const ma20 = calculateMA(deduped, 20)
+          const ma20s = chart.addLineSeries({ color: "#3b82f6", lineWidth: 1, priceLineVisible: false })
+          ma20s.setData(ma20)
+        }
+        if (!isIntraday && deduped.length >= 60) {
+          const ma60 = calculateMA(deduped, 60)
+          const ma60s = chart.addLineSeries({ color: "#f59e0b", lineWidth: 1, priceLineVisible: false })
+          ma60s.setData(ma60)
         }
 
-        if (candles.length >= 60) {
-          const ma60 = calculateMA(candles, 60)
-          const ma60Series = chart.addLineSeries({ color: "#f59e0b", lineWidth: 1 })
-          ma60Series.setData(ma60)
-        }
-
-        const volumeSeries = chart.addHistogramSeries({
+        // Volume histogram
+        const volSeries = chart.addHistogramSeries({
           color: "#6b7280",
           priceFormat: { type: "volume" },
-          priceScaleId: "",
-          scaleMargins: { top: 0.8, bottom: 0 },
+          priceScaleId: "vol",
+          scaleMargins: { top: 0.82, bottom: 0 },
         })
-        volumeSeries.setData(
-          candles.map((c: any) => ({
+        chart.priceScale("vol").applyOptions({ scaleMargins: { top: 0.82, bottom: 0 } })
+        volSeries.setData(
+          deduped.map((c) => ({
             time: c.time,
             value: c.volume,
-            color: c.close >= c.open ? "#10b98133" : "#ef444433",
+            color: c.close >= c.open ? "#10b98140" : "#ef444440",
           }))
         )
 
         chart.timeScale().fitContent()
+        setStatus("ok")
 
         const handleResize = () => {
-          if (containerRef.current) {
-            chart.applyOptions({
+          if (containerRef.current && chartRef.current) {
+            chartRef.current.applyOptions({
               width: containerRef.current.clientWidth,
               height: containerRef.current.clientHeight,
             })
           }
         }
         window.addEventListener("resize", handleResize)
-
-        cleanup = () => {
-          window.removeEventListener("resize", handleResize)
-          chart.remove()
-        }
+        return () => window.removeEventListener("resize", handleResize)
       } catch (e: any) {
-        setError(e.message || "차트 로드 실패")
-        setLoading(false)
+        if (!cancelled) {
+          setErrorMsg(e.message || "차트 로드 실패")
+          setStatus("error")
+        }
       }
     }
 
-    fetchAndRender()
+    run()
 
     return () => {
-      cleanup?.()
+      cancelled = true
+      if (chartRef.current) {
+        chartRef.current.remove()
+        chartRef.current = null
+      }
     }
   }, [symbol, period])
 
-  if (loading) {
-    return (
-      <div className="w-full h-full flex items-center justify-center text-muted-foreground text-sm">
-        차트 로딩 중...
-      </div>
-    )
-  }
-
-  if (error) {
-    return (
-      <div className="w-full h-full flex items-center justify-center text-muted-foreground text-sm">
-        {error}
-      </div>
-    )
-  }
-
-  return <div ref={containerRef} className="w-full h-full" style={{ minHeight: "300px" }} />
+  return (
+    <div className="relative w-full h-full" style={{ minHeight: "300px" }}>
+      {status === "loading" && (
+        <div className="absolute inset-0 flex items-center justify-center text-muted-foreground text-sm">
+          차트 로딩 중...
+        </div>
+      )}
+      {status === "error" && (
+        <div className="absolute inset-0 flex items-center justify-center text-muted-foreground text-sm text-center px-6">
+          <div>
+            <p className="mb-1">차트를 불러올 수 없습니다</p>
+            <p className="text-xs opacity-60">{errorMsg}</p>
+          </div>
+        </div>
+      )}
+      <div
+        ref={containerRef}
+        className="w-full h-full"
+        style={{ visibility: status === "ok" ? "visible" : "hidden" }}
+      />
+    </div>
+  )
 }
