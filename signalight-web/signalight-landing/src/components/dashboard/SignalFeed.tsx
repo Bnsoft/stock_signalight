@@ -11,33 +11,6 @@ interface Signal {
   details: string
 }
 
-const MOCK_SIGNALS: Signal[] = [
-  {
-    id: "1",
-    timestamp: new Date(Date.now() - 5 * 60000).toISOString(),
-    symbol: "TQQQ",
-    type: "ACTION",
-    title: "RSI Oversold",
-    details: "RSI: 28.3 | Price: $42.15",
-  },
-  {
-    id: "2",
-    timestamp: new Date(Date.now() - 15 * 60000).toISOString(),
-    symbol: "QQQ",
-    type: "WARNING",
-    title: "MA Death Cross",
-    details: "MA20: $443.20 < MA60: $447.80",
-  },
-  {
-    id: "3",
-    timestamp: new Date(Date.now() - 25 * 60000).toISOString(),
-    symbol: "SPY",
-    type: "INFO",
-    title: "Volume Spike",
-    details: "Vol: 2.4× avg | 84.2M",
-  },
-]
-
 const TYPE_COLORS: Record<string, string> = {
   ACTION: "text-signal-red border-signal-red/30 bg-signal-red/5",
   WARNING: "text-signal-amber border-signal-amber/30 bg-signal-amber/5",
@@ -54,30 +27,29 @@ const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"
 const WS_BASE = API_BASE.replace("http://", "ws://").replace("https://", "wss://")
 
 export function SignalFeed() {
-  const [signals, setSignals] = useState<Signal[]>(MOCK_SIGNALS)
-  const [loading, setLoading] = useState(false)
+  const [signals, setSignals] = useState<Signal[]>([])
+  const [loading, setLoading] = useState(true)
   const [wsConnected, setWsConnected] = useState(false)
 
   useEffect(() => {
-    // 초기 신호 fetch
     const fetchSignals = async () => {
       setLoading(true)
       try {
-        const res = await fetch(`${API_BASE}/api/signals?limit=50`)
+        const res = await fetch(`${API_BASE}/api/signals/recent?limit=50`)
         if (res.ok) {
           const data = await res.json()
-          const formattedSignals = data.signals.map((s: any) => ({
-            id: s.id.toString(),
-            timestamp: s.timestamp,
+          const list = (data.signals || []).map((s: any) => ({
+            id: String(s.id),
+            timestamp: s.created_at || s.timestamp,
             symbol: s.symbol,
-            type: s.severity || "INFO",
+            type: s.severity === "HIGH" ? "ACTION" : s.severity === "MEDIUM" ? "WARNING" : "INFO",
             title: s.signal_type,
             details: s.message,
           }))
-          setSignals(formattedSignals)
+          setSignals(list)
         }
-      } catch (err) {
-        console.log("Using mock signals (API unavailable)")
+      } catch {
+        // no-op: API unavailable
       } finally {
         setLoading(false)
       }
@@ -85,41 +57,31 @@ export function SignalFeed() {
 
     fetchSignals()
 
-    // WebSocket 연결 시도
+    // WebSocket
     let ws: WebSocket | null = null
     try {
       ws = new WebSocket(`${WS_BASE}/ws/signals`)
-      ws.onopen = () => {
-        setWsConnected(true)
-        console.log("WebSocket connected")
-      }
+      ws.onopen = () => setWsConnected(true)
       ws.onmessage = (event) => {
-        const data = JSON.parse(event.data)
-        if (data.signals) {
-          const formattedSignals = data.signals.map((s: any) => ({
-            id: s.id.toString(),
-            timestamp: s.timestamp,
-            symbol: s.symbol,
-            type: s.severity || "INFO",
-            title: s.signal_type,
-            details: s.message,
-          }))
-          setSignals(formattedSignals)
-        }
+        try {
+          const data = JSON.parse(event.data)
+          if (data.signals) {
+            setSignals(data.signals.map((s: any) => ({
+              id: String(s.id),
+              timestamp: s.created_at || s.timestamp,
+              symbol: s.symbol,
+              type: s.severity === "HIGH" ? "ACTION" : s.severity === "MEDIUM" ? "WARNING" : "INFO",
+              title: s.signal_type,
+              details: s.message,
+            })))
+          }
+        } catch { /* ignore */ }
       }
-      ws.onerror = () => {
-        setWsConnected(false)
-        console.log("WebSocket error, falling back to polling")
-      }
-      ws.onclose = () => {
-        setWsConnected(false)
-      }
-    } catch (err) {
-      console.log("WebSocket unavailable, using polling")
-    }
+      ws.onerror = () => setWsConnected(false)
+      ws.onclose = () => setWsConnected(false)
+    } catch { /* WebSocket unavailable */ }
 
-    // Polling fallback (30초마다)
-    const pollInterval = setInterval(fetchSignals, 30000)
+    const pollInterval = setInterval(fetchSignals, 30_000)
 
     return () => {
       clearInterval(pollInterval)
@@ -128,11 +90,9 @@ export function SignalFeed() {
   }, [])
 
   const formatTime = (isoString: string) => {
+    if (!isoString) return ""
     const date = new Date(isoString)
-    const now = new Date()
-    const diffMs = now.getTime() - date.getTime()
-    const diffMins = Math.floor(diffMs / 60000)
-
+    const diffMins = Math.floor((Date.now() - date.getTime()) / 60000)
     if (diffMins < 1) return "now"
     if (diffMins < 60) return `${diffMins}m ago`
     const diffHours = Math.floor(diffMins / 60)
@@ -141,31 +101,38 @@ export function SignalFeed() {
   }
 
   return (
-    <div className="flex flex-col h-full rounded-lg border border-border bg-card p-4">
-      <div className="mb-4">
-        <h2 className="text-lg font-semibold">Signal Feed</h2>
-        <p className="text-xs text-muted-foreground">Latest {signals.length} signals</p>
+    <div className="flex flex-col h-full bg-card/30 p-3">
+      <div className="flex items-center justify-between mb-3">
+        <div>
+          <h2 className="text-sm font-semibold">Signal Feed</h2>
+          <p className="text-xs text-muted-foreground">
+            {wsConnected ? "● 실시간" : `${signals.length}개`}
+          </p>
+        </div>
       </div>
 
-      <div className="space-y-2 flex-1 overflow-y-auto">
-        {signals.length === 0 ? (
-          <p className="text-sm text-muted-foreground text-center py-8">
-            No signals yet. Waiting for market events...
-          </p>
+      <div className="space-y-1.5 flex-1 overflow-y-auto">
+        {loading ? (
+          <p className="text-xs text-muted-foreground text-center py-8">로딩 중...</p>
+        ) : signals.length === 0 ? (
+          <div className="text-center py-10">
+            <p className="text-xs text-muted-foreground">시그널 없음</p>
+            <p className="text-xs text-muted-foreground mt-1">시그널 피드 페이지에서 스캔하세요</p>
+          </div>
         ) : (
           signals.map((signal) => (
             <div
               key={signal.id}
-              className={`rounded-lg border px-3 py-2.5 text-xs transition ${TYPE_COLORS[signal.type]}`}
+              className={`rounded-lg border px-2.5 py-2 text-xs transition ${TYPE_COLORS[signal.type] || TYPE_COLORS.INFO}`}
             >
-              <div className="flex items-start justify-between mb-1">
+              <div className="flex items-start justify-between mb-0.5">
                 <span className="font-semibold">
                   {TYPE_EMOJI[signal.type]} {signal.symbol}
                 </span>
                 <span className="text-xs opacity-60">{formatTime(signal.timestamp)}</span>
               </div>
-              <p className="opacity-80 font-mono">{signal.title}</p>
-              <p className="opacity-50 font-mono">{signal.details}</p>
+              <p className="opacity-80 font-mono text-xs">{signal.title}</p>
+              <p className="opacity-50 font-mono text-xs truncate">{signal.details}</p>
             </div>
           ))
         )}

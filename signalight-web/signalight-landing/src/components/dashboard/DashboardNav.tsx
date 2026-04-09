@@ -60,9 +60,6 @@ const NAV_GROUPS: NavGroup[] = [
     label: "거래/전략",
     items: [
       { href: "/dashboard/backtesting", label: "백테스팅", icon: TrendingUp },
-      { href: "/dashboard/options", label: "옵션 분석", icon: LineChart },
-      { href: "/dashboard/advanced-trading", label: "고급 주문", icon: ShieldAlert },
-      { href: "/dashboard/auto-trade", label: "자동매매", icon: BookOpen },
     ],
   },
   {
