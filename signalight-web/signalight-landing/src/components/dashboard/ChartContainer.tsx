@@ -22,13 +22,10 @@ const PERIOD_CONFIG: Record<string, { interval: string; period: string }> = {
   "1M": { interval: "1d",  period: "1mo" },
 }
 
-function toChartTime(isoTimestamp: string, isIntraday: boolean): number | string {
-  const date = new Date(isoTimestamp)
-  if (isIntraday) {
-    return Math.floor(date.getTime() / 1000) as number
-  }
-  // Daily: YYYY-MM-DD
-  return isoTimestamp.slice(0, 10)
+function toChartTime(isoTimestamp: string, isIntraday: boolean): number {
+  // Always return Unix seconds — lightweight-charts v5 handles both number and string,
+  // but using numbers avoids sorting/comparison bugs with timezone-aware ISO strings.
+  return Math.floor(new Date(isoTimestamp).getTime() / 1000)
 }
 
 function calcMA(data: { time: any; close: number }[], w: number) {
@@ -82,7 +79,7 @@ export function ChartContainer({ symbol, period }: ChartContainerProps) {
             close: c.close,
             volume: c.volume,
           }))
-          .sort((a, b) => String(a.time) < String(b.time) ? -1 : 1)
+          .sort((a, b) => (a.time as number) - (b.time as number))
           .filter((c) => {
             const k = String(c.time)
             if (seen.has(k)) return false

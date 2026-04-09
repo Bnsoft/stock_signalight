@@ -25,7 +25,7 @@ export default function DashboardPage() {
 
   const [watchlist, setWatchlist] = useState<WatchlistItem[]>([])
   const [selectedSymbol, setSelectedSymbol] = useState("")
-  const [selectedPeriod, setSelectedPeriod] = useState("1D")
+  const [selectedPeriod, setSelectedPeriod] = useState("1M")
   const [loading, setLoading] = useState(true)
   const [newSymbol, setNewSymbol] = useState("")
   const [adding, setAdding] = useState(false)
