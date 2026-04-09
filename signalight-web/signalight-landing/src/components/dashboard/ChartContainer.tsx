@@ -1,7 +1,13 @@
 "use client"
 
 import { useEffect, useRef, useState } from "react"
-import { createChart, ColorType } from "lightweight-charts"
+import {
+  createChart,
+  ColorType,
+  CandlestickSeries,
+  LineSeries,
+  HistogramSeries,
+} from "lightweight-charts"
 
 interface ChartContainerProps {
   symbol: string
@@ -19,19 +25,18 @@ const PERIOD_CONFIG: Record<string, { interval: string; period: string }> = {
 function toChartTime(isoTimestamp: string, isIntraday: boolean): number | string {
   const date = new Date(isoTimestamp)
   if (isIntraday) {
-    // lightweight-charts expects Unix seconds for intraday
-    return Math.floor(date.getTime() / 1000)
+    return Math.floor(date.getTime() / 1000) as number
   }
-  // For daily: YYYY-MM-DD string
-  return isoTimestamp.split("T")[0]
+  // Daily: YYYY-MM-DD
+  return isoTimestamp.slice(0, 10)
 }
 
-function calculateMA(data: { time: any; close: number }[], window: number) {
+function calcMA(data: { time: any; close: number }[], w: number) {
   return data
-    .map((c, idx) => {
-      if (idx < window - 1) return null
-      const sum = data.slice(idx - window + 1, idx + 1).reduce((a, x) => a + x.close, 0)
-      return { time: c.time, value: parseFloat((sum / window).toFixed(2)) }
+    .map((c, i) => {
+      if (i < w - 1) return null
+      const avg = data.slice(i - w + 1, i + 1).reduce((s, x) => s + x.close, 0) / w
+      return { time: c.time, value: parseFloat(avg.toFixed(2)) }
     })
     .filter(Boolean) as { time: any; value: number }[]
 }
@@ -48,7 +53,6 @@ export function ChartContainer({ symbol, period }: ChartContainerProps) {
     setStatus("loading")
     setErrorMsg("")
 
-    // Destroy previous chart
     if (chartRef.current) {
       chartRef.current.remove()
       chartRef.current = null
@@ -56,23 +60,19 @@ export function ChartContainer({ symbol, period }: ChartContainerProps) {
 
     const { interval, period: p } = PERIOD_CONFIG[period] || PERIOD_CONFIG["1D"]
     const isIntraday = ["1m", "5m", "15m", "30m", "1h"].includes(interval)
-
     let cancelled = false
 
     const run = async () => {
       try {
         const res = await fetch(`${API_BASE}/api/chart/${symbol}?interval=${interval}&period=${p}`)
-        if (!res.ok) {
-          const msg = await res.text().catch(() => res.statusText)
-          throw new Error(`API 오류 ${res.status}: ${msg}`)
-        }
+        if (!res.ok) throw new Error(`HTTP ${res.status}`)
         const data = await res.json()
         const raw: any[] = data.candles || []
         if (raw.length === 0) throw new Error("데이터 없음")
-
         if (cancelled || !containerRef.current) return
 
-        // Transform to lightweight-charts format
+        // Map & deduplicate
+        const seen = new Set<string>()
         const candles = raw
           .map((c) => ({
             time: toChartTime(c.timestamp, isIntraday),
@@ -82,36 +82,32 @@ export function ChartContainer({ symbol, period }: ChartContainerProps) {
             close: c.close,
             volume: c.volume,
           }))
-          // Sort ascending (required by lightweight-charts)
-          .sort((a, b) => (a.time as any) - (b.time as any))
+          .sort((a, b) => String(a.time) < String(b.time) ? -1 : 1)
+          .filter((c) => {
+            const k = String(c.time)
+            if (seen.has(k)) return false
+            seen.add(k)
+            return true
+          })
 
-        // Remove duplicate timestamps
-        const seen = new Set()
-        const deduped = candles.filter((c) => {
-          const key = String(c.time)
-          if (seen.has(key)) return false
-          seen.add(key)
-          return true
-        })
-
-        const chart: any = createChart(containerRef.current!, {
+        const chart: any = createChart(containerRef.current, {
           layout: {
             background: { type: ColorType.Solid, color: "transparent" },
             textColor: "#9ca3af",
           },
           grid: {
-            vertLines: { color: "#1f293730" },
-            horzLines: { color: "#1f293730" },
+            vertLines: { color: "#ffffff08" },
+            horzLines: { color: "#ffffff08" },
           },
           crosshair: { mode: 1 },
           timeScale: { timeVisible: true, secondsVisible: isIntraday },
-          width: containerRef.current!.clientWidth,
-          height: containerRef.current!.clientHeight || 360,
+          width: containerRef.current.clientWidth,
+          height: containerRef.current.clientHeight || 360,
         })
         chartRef.current = chart
 
-        // Candlestick
-        const candleSeries = chart.addCandlestickSeries({
+        // v5 API: addSeries(SeriesType, options)
+        const candleSeries = chart.addSeries(CandlestickSeries, {
           upColor: "#10b981",
           downColor: "#ef4444",
           borderUpColor: "#10b981",
@@ -119,30 +115,25 @@ export function ChartContainer({ symbol, period }: ChartContainerProps) {
           wickUpColor: "#10b981",
           wickDownColor: "#ef4444",
         })
-        candleSeries.setData(deduped)
+        candleSeries.setData(candles)
 
-        // MA lines (only for daily+ data)
-        if (!isIntraday && deduped.length >= 20) {
-          const ma20 = calculateMA(deduped, 20)
-          const ma20s = chart.addLineSeries({ color: "#3b82f6", lineWidth: 1, priceLineVisible: false })
-          ma20s.setData(ma20)
+        if (!isIntraday && candles.length >= 20) {
+          const ma20s = chart.addSeries(LineSeries, { color: "#3b82f6", lineWidth: 1, priceLineVisible: false, lastValueVisible: false })
+          ma20s.setData(calcMA(candles, 20))
         }
-        if (!isIntraday && deduped.length >= 60) {
-          const ma60 = calculateMA(deduped, 60)
-          const ma60s = chart.addLineSeries({ color: "#f59e0b", lineWidth: 1, priceLineVisible: false })
-          ma60s.setData(ma60)
+        if (!isIntraday && candles.length >= 60) {
+          const ma60s = chart.addSeries(LineSeries, { color: "#f59e0b", lineWidth: 1, priceLineVisible: false, lastValueVisible: false })
+          ma60s.setData(calcMA(candles, 60))
         }
 
-        // Volume histogram
-        const volSeries = chart.addHistogramSeries({
+        const volSeries = chart.addSeries(HistogramSeries, {
           color: "#6b7280",
           priceFormat: { type: "volume" },
           priceScaleId: "vol",
-          scaleMargins: { top: 0.82, bottom: 0 },
         })
         chart.priceScale("vol").applyOptions({ scaleMargins: { top: 0.82, bottom: 0 } })
         volSeries.setData(
-          deduped.map((c) => ({
+          candles.map((c) => ({
             time: c.time,
             value: c.volume,
             color: c.close >= c.open ? "#10b98140" : "#ef444440",
@@ -152,7 +143,7 @@ export function ChartContainer({ symbol, period }: ChartContainerProps) {
         chart.timeScale().fitContent()
         setStatus("ok")
 
-        const handleResize = () => {
+        const onResize = () => {
           if (containerRef.current && chartRef.current) {
             chartRef.current.applyOptions({
               width: containerRef.current.clientWidth,
@@ -160,8 +151,8 @@ export function ChartContainer({ symbol, period }: ChartContainerProps) {
             })
           }
         }
-        window.addEventListener("resize", handleResize)
-        return () => window.removeEventListener("resize", handleResize)
+        window.addEventListener("resize", onResize)
+        return () => window.removeEventListener("resize", onResize)
       } catch (e: any) {
         if (!cancelled) {
           setErrorMsg(e.message || "차트 로드 실패")
@@ -199,7 +190,7 @@ export function ChartContainer({ symbol, period }: ChartContainerProps) {
       <div
         ref={containerRef}
         className="w-full h-full"
-        style={{ visibility: status === "ok" ? "visible" : "hidden" }}
+        style={{ visibility: status === "ok" ? "visible" : "hidden", minHeight: "300px" }}
       />
     </div>
   )

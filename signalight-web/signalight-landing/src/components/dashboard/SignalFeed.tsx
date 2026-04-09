@@ -38,11 +38,18 @@ export function SignalFeed() {
         const res = await fetch(`${API_BASE}/api/signals/recent?limit=50`)
         if (res.ok) {
           const data = await res.json()
-          const list = (data.signals || []).map((s: any) => ({
+          const raw = data.signals || []
+          // Deduplicate: keep only latest per (symbol, signal_type)
+          const seen = new Map<string, any>()
+          for (const s of raw) {
+            const key = `${s.symbol}__${s.signal_type}`
+            if (!seen.has(key)) seen.set(key, s)
+          }
+          const list = Array.from(seen.values()).map((s: any) => ({
             id: String(s.id),
             timestamp: s.created_at || s.timestamp,
             symbol: s.symbol,
-            type: s.severity === "HIGH" ? "ACTION" : s.severity === "MEDIUM" ? "WARNING" : "INFO",
+            type: (["ACTION", "WARNING", "INFO"].includes(s.severity) ? s.severity : "INFO") as "ACTION" | "WARNING" | "INFO",
             title: s.signal_type,
             details: s.message,
           }))
@@ -66,11 +73,16 @@ export function SignalFeed() {
         try {
           const data = JSON.parse(event.data)
           if (data.signals) {
-            setSignals(data.signals.map((s: any) => ({
+            const seen = new Map<string, any>()
+            for (const s of data.signals) {
+              const key = `${s.symbol}__${s.signal_type}`
+              if (!seen.has(key)) seen.set(key, s)
+            }
+            setSignals(Array.from(seen.values()).map((s: any) => ({
               id: String(s.id),
               timestamp: s.created_at || s.timestamp,
               symbol: s.symbol,
-              type: s.severity === "HIGH" ? "ACTION" : s.severity === "MEDIUM" ? "WARNING" : "INFO",
+              type: (["ACTION", "WARNING", "INFO"].includes(s.severity) ? s.severity : "INFO") as "ACTION" | "WARNING" | "INFO",
               title: s.signal_type,
               details: s.message,
             })))
