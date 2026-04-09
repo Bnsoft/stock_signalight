@@ -5,7 +5,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 import asyncio
 import json
+import logging
 from typing import Dict, Set
+
+logger = logging.getLogger(__name__)
 
 # Import all route modules
 from . import (
@@ -30,17 +33,119 @@ from .error_handlers import setup_error_handlers
 # Initialize realtime manager
 realtime_manager = RealtimeUpdateManager()
 
+# In-memory cache of last indicators per symbol (for crossover detection)
+_prev_indicators: dict = {}
+
+
+def _is_market_open() -> bool:
+    """Return True during NYSE trading hours Mon–Fri 09:30–16:00 ET."""
+    from datetime import datetime
+    import zoneinfo
+    now = datetime.now(zoneinfo.ZoneInfo("America/New_York"))
+    if now.weekday() >= 5:
+        return False
+    market_open  = now.replace(hour=9,  minute=30, second=0, microsecond=0)
+    market_close = now.replace(hour=16, minute=0,  second=0, microsecond=0)
+    return market_open <= now <= market_close
+
+
+async def _run_scan() -> int:
+    """Scan all watchlist symbols and save signals to DB. Returns signal count."""
+    from .store import get_watchlist, save_signal, log_scan
+    from .market import fetch_daily_data
+    from .pulse import get_all_indicators
+    from .trigger import evaluate_all_signals
+    from .alert import send_alert
+    from .config import SIGNAL_CONFIG
+
+    wl = get_watchlist()
+    if not wl:
+        logger.info("Background scan: watchlist empty, skipping")
+        return 0
+
+    all_signals = []
+    errors = []
+
+    for entry in wl:
+        symbol = entry["symbol"]
+        try:
+            df = await asyncio.get_event_loop().run_in_executor(
+                None, fetch_daily_data, symbol, "6mo"
+            )
+            if df.empty:
+                continue
+            indicators = get_all_indicators(df)
+            prev = _prev_indicators.get(symbol, {})
+            signals = evaluate_all_signals(symbol, indicators, prev)
+            _prev_indicators[symbol] = indicators
+
+            for sig in signals:
+                save_signal(
+                    symbol=sig["symbol"],
+                    signal_type=sig["signal_type"],
+                    severity=sig["severity"],
+                    message=sig["message"],
+                    indicators=sig["indicators"],
+                    price=sig["price"],
+                )
+                try:
+                    await send_alert(sig)
+                except Exception:
+                    pass  # Telegram optional
+                all_signals.append(sig)
+        except Exception as e:
+            errors.append(f"{symbol}: {e}")
+            logger.warning(f"Scan error for {symbol}: {e}")
+
+    log_scan(
+        symbols_scanned=len(wl),
+        signals_found=len(all_signals),
+        errors="; ".join(errors),
+    )
+    logger.info(f"Background scan complete — {len(wl)} symbols, {len(all_signals)} signals")
+    return len(all_signals)
+
+
+async def _background_scanner():
+    """Periodic scanner running every SCAN_INTERVAL_MINUTES during market hours."""
+    from .config import SIGNAL_CONFIG
+    interval_minutes = SIGNAL_CONFIG.get("scan_interval_minutes", 30)
+    interval_seconds = interval_minutes * 60
+
+    # Initial delay so the server is fully ready
+    await asyncio.sleep(10)
+    logger.info(f"Background scanner started — interval {interval_minutes}min")
+
+    while True:
+        try:
+            if _is_market_open():
+                logger.info("Background scan starting...")
+                await _run_scan()
+            else:
+                logger.info("Market closed — scan skipped")
+        except asyncio.CancelledError:
+            break
+        except Exception as e:
+            logger.error(f"Background scanner unexpected error: {e}", exc_info=True)
+        await asyncio.sleep(interval_seconds)
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Startup and shutdown events"""
-    # Startup — initialize DB tables
     from . import store as db_store
     db_store.init_db()
-    print("Starting Signalight API — DB initialized")
+    logger.info("Signalight API started — DB initialized")
+
+    # Start background scanner as a non-blocking task
+    scanner_task = asyncio.create_task(_background_scanner())
+
     yield
+
     # Shutdown
-    print("Shutting down Signalight API...")
+    logger.info("Shutting down Signalight API...")
+    scanner_task.cancel()
+    await asyncio.gather(scanner_task, return_exceptions=True)
     await realtime_manager.shutdown()
 
 
@@ -473,28 +578,74 @@ async def get_crypto_prices():
 
 @app.get("/api/market/sectors")
 async def get_sector_performance():
-    """Retrieve sector performance data."""
-    return {
-        "sectors": [
-            {"name": "기술", "return": 2.5},
-            {"name": "의료", "return": 1.2},
-            {"name": "금융", "return": -0.5},
-            {"name": "에너지", "return": 3.1},
-            {"name": "소비재", "return": 0.8},
-        ]
-    }
+    """Retrieve sector ETF performance data via yfinance."""
+    import yfinance as yf
+    SECTOR_ETFS = [
+        ("XLK", "기술"),
+        ("XLV", "의료"),
+        ("XLF", "금융"),
+        ("XLE", "에너지"),
+        ("XLY", "소비재"),
+        ("XLI", "산업"),
+        ("XLP", "필수소비재"),
+        ("XLB", "소재"),
+        ("XLRE", "부동산"),
+        ("XLU", "유틸리티"),
+    ]
+
+    def _fetch():
+        results = []
+        for symbol, name in SECTOR_ETFS:
+            try:
+                t = yf.Ticker(symbol)
+                hist = t.history(period="2d")
+                if len(hist) >= 2:
+                    prev = hist["Close"].iloc[-2]
+                    curr = hist["Close"].iloc[-1]
+                    ret = round((curr - prev) / prev * 100, 2)
+                else:
+                    ret = 0.0
+                results.append({"symbol": symbol, "name": name, "return": ret})
+            except Exception:
+                results.append({"symbol": symbol, "name": name, "return": 0.0})
+        return results
+
+    sectors = await asyncio.get_event_loop().run_in_executor(None, _fetch)
+    return {"sectors": sectors}
 
 
 @app.get("/api/market/indices")
 async def get_market_indices():
-    """Retrieve major market indices."""
-    return {
-        "indices": [
-            {"symbol": "^GSPC", "name": "S&P 500", "price": 5200.5, "change": 1.2, "changePercent": 0.023},
-            {"symbol": "^IXIC", "name": "나스닥", "price": 16800.3, "change": -50.2, "changePercent": -0.003},
-            {"symbol": "^DJI", "name": "다우지수", "price": 38500.1, "change": 150.5, "changePercent": 0.004},
-        ]
-    }
+    """Retrieve major market indices via yfinance."""
+    import yfinance as yf
+    INDICES = [
+        ("^GSPC", "S&P 500"),
+        ("^IXIC", "나스닥"),
+        ("^DJI", "다우지수"),
+        ("^RUT", "러셀 2000"),
+        ("^VIX", "VIX"),
+    ]
+
+    def _fetch():
+        results = []
+        for symbol, name in INDICES:
+            try:
+                t = yf.Ticker(symbol)
+                hist = t.history(period="2d")
+                if len(hist) >= 2:
+                    prev = float(hist["Close"].iloc[-2])
+                    curr = float(hist["Close"].iloc[-1])
+                    change = round(curr - prev, 2)
+                    change_pct = round((curr - prev) / prev * 100, 3)
+                else:
+                    curr, change, change_pct = 0.0, 0.0, 0.0
+                results.append({"symbol": symbol, "name": name, "price": round(curr, 2), "change": change, "changePercent": change_pct})
+            except Exception:
+                results.append({"symbol": symbol, "name": name, "price": 0.0, "change": 0.0, "changePercent": 0.0})
+        return results
+
+    indices = await asyncio.get_event_loop().run_in_executor(None, _fetch)
+    return {"indices": indices}
 
 
 # ============= WebSocket Real-time Routes =============
