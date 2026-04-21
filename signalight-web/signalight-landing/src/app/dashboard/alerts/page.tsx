@@ -20,6 +20,7 @@ import { useCache } from "@/hooks/useCache"
 import { usePagination } from "@/hooks/usePagination"
 import { ToastContainer } from "@/components/ToastContainer"
 import { Pagination } from "@/components/Pagination"
+import { MAChart } from "@/components/dashboard/MAChart"
 
 interface Alert {
   id: string
@@ -541,6 +542,17 @@ export default function AlertsPage() {
                       </select>
                     </div>
                   </>
+                )}
+
+                {/* MA 차트 */}
+                {selectedType === "ma" && formData.symbol.length >= 1 && (
+                  <div className="md:col-span-2 mt-1">
+                    <MAChart
+                      symbol={formData.symbol}
+                      timeframe={formData.maTimeframe as "1D" | "1W"}
+                      height={380}
+                    />
+                  </div>
                 )}
 
                 {/* MA 실시간 프리뷰 */}
