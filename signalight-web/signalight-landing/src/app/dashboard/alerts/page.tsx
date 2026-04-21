@@ -80,6 +80,7 @@ export default function AlertsPage() {
   const [activeTab, setActiveTab] = useState<"alerts" | "logs">("alerts")
   const [logs, setLogs] = useState<ScheduleLog[]>([])
   const [logsLoading, setLogsLoading] = useState(false)
+  const [expandedLog, setExpandedLog] = useState<number | null>(null)
   const [showAddForm, setShowAddForm] = useState(false)
   const [editingAlert, setEditingAlert] = useState<Alert | null>(null)
   const [runningId, setRunningId] = useState<string | null>(null)
@@ -791,40 +792,72 @@ export default function AlertsPage() {
                     </thead>
                     <tbody>
                       {logs.map(log => (
-                        <tr key={log.id} className="border-b border-[#f0eee6]/50 hover:bg-[#f5f4ed] transition-colors">
-                          <td className="px-4 py-3 text-xs text-[#87867f] whitespace-nowrap font-mono">
-                            {new Date(log.fired_at).toLocaleString("ko-KR", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })}
-                          </td>
-                          <td className="px-4 py-3 font-medium text-[#141413]">{log.symbol}</td>
-                          <td className="px-4 py-3 text-xs text-[#87867f]">
-                            {log.schedule_type === "manual" ? "▶ 수동실행" : log.schedule_type === "once" ? "⏰ 특정시간" : `🔁 반복`}
-                          </td>
-                          <td className="px-4 py-3">
-                            <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${
-                              log.status === "success" ? "bg-[#2d6a4f]/10 text-[#2d6a4f]" :
-                              log.status === "failed" ? "bg-[#b53333]/10 text-[#b53333]" :
-                              "bg-[#e8e6dc] text-[#87867f]"
-                            }`}>
-                              {log.status === "success" ? "✓ 성공" : log.status === "failed" ? "✗ 실패" : "건너뜀"}
-                            </span>
-                          </td>
-                          <td className="px-4 py-3 text-center">
-                            {log.status === "success" ? (
-                              <span className={`text-xs font-medium ${log.triggered ? "text-[#c96442]" : "text-[#87867f]"}`}>
-                                {log.triggered ? "🚨 충족" : "✅ 미충족"}
+                        <>
+                          <tr
+                            key={log.id}
+                            onClick={() => setExpandedLog(expandedLog === log.id ? null : log.id)}
+                            className={`border-b border-[#f0eee6]/50 transition-colors cursor-pointer ${
+                              log.status === "failed" ? "hover:bg-[#b53333]/5" : "hover:bg-[#f5f4ed]"
+                            }`}
+                          >
+                            <td className="px-4 py-3 text-xs text-[#87867f] whitespace-nowrap font-mono">
+                              {new Date(log.fired_at).toLocaleString("ko-KR", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })}
+                            </td>
+                            <td className="px-4 py-3 font-medium text-[#141413]">{log.symbol}</td>
+                            <td className="px-4 py-3 text-xs text-[#87867f]">
+                              {log.schedule_type === "manual" ? "▶ 수동" : log.schedule_type === "once" ? "⏰ 예약" : "🔁 반복"}
+                            </td>
+                            <td className="px-4 py-3">
+                              <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${
+                                log.status === "success" ? "bg-[#2d6a4f]/10 text-[#2d6a4f]" :
+                                "bg-[#b53333]/10 text-[#b53333]"
+                              }`}>
+                                {log.status === "success" ? "✓ 성공" : "✗ 실패"}
                               </span>
-                            ) : <span className="text-[#b0aea5]">—</span>}
-                          </td>
-                          <td className="px-4 py-3 text-xs text-[#5e5d59] max-w-xs">
-                            {log.error_reason ? (
-                              <span className="text-[#b53333]">{log.error_reason}</span>
-                            ) : log.message_sent ? (
-                              <span className="truncate block max-w-[200px]" title={log.message_sent}>
-                                {log.message_sent.replace(/<[^>]+>/g, "").slice(0, 60)}...
-                              </span>
-                            ) : "—"}
-                          </td>
-                        </tr>
+                            </td>
+                            <td className="px-4 py-3 text-center">
+                              {log.status === "success" ? (
+                                <span className={`text-xs font-medium ${log.triggered ? "text-[#c96442]" : "text-[#87867f]"}`}>
+                                  {log.triggered ? "🚨 충족" : "✅ 미충족"}
+                                </span>
+                              ) : <span className="text-[#b0aea5]">—</span>}
+                            </td>
+                            <td className="px-4 py-3 text-xs text-[#5e5d59]">
+                              {log.status === "failed" ? (
+                                <span className="text-[#b53333] font-medium flex items-center gap-1">
+                                  ⚠ {log.error_reason ? log.error_reason.slice(0, 50) + (log.error_reason.length > 50 ? "…" : "") : "알 수 없는 오류"}
+                                </span>
+                              ) : log.message_sent ? (
+                                <span className="text-[#87867f]">
+                                  {log.message_sent.replace(/<[^>]+>/g, "").slice(0, 40)}…
+                                </span>
+                              ) : "—"}
+                            </td>
+                          </tr>
+
+                          {/* 확장 상세 패널 */}
+                          {expandedLog === log.id && (
+                            <tr key={`${log.id}-detail`} className="border-b border-[#f0eee6]">
+                              <td colSpan={6} className="px-5 py-4 bg-[#f5f4ed]">
+                                {log.status === "failed" ? (
+                                  <div>
+                                    <p className="text-xs font-medium text-[#b53333] uppercase tracking-wide mb-2">오류 원인</p>
+                                    <pre className="text-xs text-[#b53333] bg-[#b53333]/5 border border-[#b53333]/20 rounded-xl px-4 py-3 whitespace-pre-wrap break-all leading-relaxed">
+                                      {log.error_reason || "오류 메시지가 기록되지 않았습니다."}
+                                    </pre>
+                                  </div>
+                                ) : log.message_sent ? (
+                                  <div>
+                                    <p className="text-xs font-medium text-[#87867f] uppercase tracking-wide mb-2">발송된 메시지</p>
+                                    <pre className="text-xs text-[#5e5d59] bg-white border border-[#f0eee6] rounded-xl px-4 py-3 whitespace-pre-wrap leading-relaxed">
+                                      {log.message_sent.replace(/<b>/g, "").replace(/<\/b>/g, "").replace(/<[^>]+>/g, "")}
+                                    </pre>
+                                  </div>
+                                ) : null}
+                              </td>
+                            </tr>
+                          )}
+                        </>
                       ))}
                     </tbody>
                   </table>
