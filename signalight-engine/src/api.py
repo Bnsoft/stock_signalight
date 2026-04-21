@@ -733,6 +733,103 @@ async def export_alerts(user_id: str, format: str = "csv"):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+# ─── Reports ─────────────────────────────────────────────
+
+class ReportSubscriptionRequest(BaseModel):
+    name: str
+    symbols: List[str]
+    report_time: str        # "HH:MM"
+    days: str = "weekdays"  # "daily" | "weekdays" | "MON,WED,FRI"
+    channels: List[str] = ["TELEGRAM"]
+
+class ReportSubscriptionUpdate(BaseModel):
+    name: Optional[str] = None
+    symbols: Optional[List[str]] = None
+    report_time: Optional[str] = None
+    days: Optional[str] = None
+    channels: Optional[List[str]] = None
+    is_active: Optional[bool] = None
+
+
+@app.get("/api/reports/subscriptions")
+async def get_report_subscriptions(user_id: str):
+    try:
+        subs = db_store.get_report_subscriptions(user_id)
+        for s in subs:
+            s["symbols"] = s["symbols"].split(",") if s.get("symbols") else []
+            s["channels"] = s["channels"].split(",") if s.get("channels") else []
+        return {"subscriptions": subs}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/reports/subscriptions")
+async def create_report_subscription(user_id: str, req: ReportSubscriptionRequest):
+    try:
+        sub = db_store.create_report_subscription(
+            user_id=user_id, name=req.name, symbols=req.symbols,
+            report_time=req.report_time, days=req.days, channels=req.channels,
+        )
+        sub["symbols"] = sub["symbols"].split(",") if sub.get("symbols") else []
+        sub["channels"] = sub["channels"].split(",") if sub.get("channels") else []
+        return sub
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.put("/api/reports/subscriptions/{sub_id}")
+async def update_report_subscription(sub_id: int, req: ReportSubscriptionUpdate):
+    try:
+        updates = req.dict(exclude_unset=True)
+        if "is_active" in updates:
+            updates["is_active"] = 1 if updates["is_active"] else 0
+        sub = db_store.update_report_subscription(sub_id, **updates)
+        if not sub:
+            raise HTTPException(status_code=404, detail="Subscription not found")
+        sub["symbols"] = sub["symbols"].split(",") if sub.get("symbols") else []
+        sub["channels"] = sub["channels"].split(",") if sub.get("channels") else []
+        return sub
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.delete("/api/reports/subscriptions/{sub_id}")
+async def delete_report_subscription(sub_id: int):
+    try:
+        db_store.delete_report_subscription(sub_id)
+        return {"status": "ok"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/reports/history")
+async def get_report_history(user_id: str, limit: int = 50):
+    try:
+        return {"history": db_store.get_report_history(user_id, limit)}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/reports/subscriptions/{sub_id}/run")
+async def run_report_now(sub_id: int, user_id: str):
+    """Manually trigger a report subscription immediately."""
+    try:
+        subs = db_store.get_report_subscriptions(user_id)
+        sub = next((s for s in subs if s["id"] == sub_id), None)
+        if not sub:
+            raise HTTPException(status_code=404, detail="Subscription not found")
+
+        from .main import _send_report
+        content, error = await _send_report(sub)
+        return {"status": "success" if not error else "failed", "content": content, "error": error}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 # ─── Schedule Run Logs ───────────────────────────────────
 
 @app.get("/api/alerts/schedule-logs")

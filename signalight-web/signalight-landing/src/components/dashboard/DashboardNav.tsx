@@ -5,7 +5,7 @@ import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 import { useAuth } from "@/context/AuthContext"
 import { cn } from "@/lib/utils"
-import { Bell, Calculator, Download, User, Menu, X, LogOut, Radio, ChevronDown, ChevronRight } from "lucide-react"
+import { Bell, Calculator, Download, User, Menu, X, LogOut, Radio, ChevronDown, ChevronRight, FileBarChart } from "lucide-react"
 
 interface NavItem { href: string; label: string; icon: React.ComponentType<{ className?: string }> }
 interface NavGroup { label: string; items: NavItem[] }
@@ -15,6 +15,7 @@ const NAV_GROUPS: NavGroup[] = [
     label: "도구",
     items: [
       { href: "/dashboard/alerts", label: "알람 관리", icon: Bell },
+      { href: "/dashboard/reports", label: "리포트", icon: FileBarChart },
       { href: "/dashboard/calculator", label: "계산기", icon: Calculator },
       { href: "/dashboard/backtest-calculator", label: "백테스트 계산기", icon: Calculator },
       { href: "/dashboard/data-export", label: "데이터 내보내기", icon: Download },

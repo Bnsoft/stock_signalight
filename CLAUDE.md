@@ -19,6 +19,7 @@ docs/                    → Reference docs
 ## Active Dashboard Pages
 - `/dashboard` — Home
 - `/dashboard/alerts` — Alarm management (price / MA / volume)
+- `/dashboard/reports` — Daily report subscriptions (Telegram / Email)
 - `/dashboard/calculator` — ROI calculator
 - `/dashboard/backtest-calculator` — Backtest calculator
 - `/dashboard/data-export` — CSV export

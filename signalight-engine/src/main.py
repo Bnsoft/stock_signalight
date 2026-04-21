@@ -249,6 +249,119 @@ async def _schedule_checker():
         await asyncio.sleep(60)
 
 
+async def _send_report(sub: dict) -> tuple[str | None, str | None]:
+    """Build and send a report for a subscription. Returns (content, error)."""
+    from .market import fetch_daily_data
+    from .pulse import get_all_indicators, calculate_ma
+    from .alert import send_message
+
+    symbols = sub["symbols"].split(",") if isinstance(sub["symbols"], str) else sub["symbols"]
+    channels = sub["channels"].split(",") if isinstance(sub["channels"], str) else sub["channels"]
+    name = sub.get("name", "데일리 리포트")
+
+    lines = [f"📊 <b>{name}</b>\n{'─' * 22}"]
+
+    try:
+        for sym in symbols:
+            sym = sym.strip().upper()
+            df = await asyncio.get_event_loop().run_in_executor(None, fetch_daily_data, sym, "1y")
+            if df.empty:
+                lines.append(f"\n<b>{sym}</b>: 데이터 없음")
+                continue
+
+            ind = get_all_indicators(df)
+            price = ind.get("current_price", 0)
+            mas = {p: calculate_ma(df, p) for p in (5, 20, 50, 120, 200)}
+            rsi_key = next((k for k in ind if k.startswith("rsi_")), None)
+            rsi = ind.get(rsi_key) if rsi_key else None
+            dd = ind.get("drawdown_pct")
+            vol = int(df["Volume"].iloc[-1]) if "Volume" in df.columns else 0
+            avg_vol = int(df["Volume"].tail(252).mean()) if "Volume" in df.columns else 0
+            vol_pct = round((vol - avg_vol) / avg_vol * 100, 1) if avg_vol else 0
+
+            def _f(v): return f"${v:.2f}" if v else "—"
+            def _a(p, ma): return "↑" if p and ma and p > ma else "↓" if ma else ""
+
+            lines.append(
+                f"\n<b>{sym}</b>  ${price:.2f}\n"
+                f"  MA5:{_f(mas[5])}{_a(price,mas[5])} MA20:{_f(mas[20])}{_a(price,mas[20])} "
+                f"MA50:{_f(mas[50])}{_a(price,mas[50])}\n"
+                f"  MA120:{_f(mas[120])}{_a(price,mas[120])} MA200:{_f(mas[200])}{_a(price,mas[200])}\n"
+                f"  RSI:{f'{rsi:.1f}' if rsi else '—'}  "
+                f"DD:{f'{dd:.1f}%' if dd is not None else '—'}  "
+                f"거래량:{vol_pct:+.1f}%"
+            )
+
+        content = "\n".join(lines)
+
+        if "TELEGRAM" in [c.upper() for c in channels]:
+            await send_message(content)
+
+        return content, None
+
+    except Exception as e:
+        return None, str(e)
+
+
+async def _report_scheduler():
+    """Send report subscriptions at scheduled times."""
+    import zoneinfo
+    from datetime import datetime
+
+    _fired: dict[str, str] = {}  # sub_id -> "HH:MM" last fired
+
+    await asyncio.sleep(20)
+    logger.info("Report scheduler started")
+
+    while True:
+        try:
+            now = datetime.now(zoneinfo.ZoneInfo("America/New_York"))
+            current_time = now.strftime("%H:%M")
+            current_minute = now.hour * 60 + now.minute
+            weekday = now.strftime("%a").upper()[:3]
+
+            subs = store.get_active_report_subscriptions()
+
+            for sub in subs:
+                days = (sub.get("days") or "weekdays").lower()
+                day_ok = (
+                    days == "daily" or
+                    (days == "weekdays" and weekday in ("MON", "TUE", "WED", "THU", "FRI")) or
+                    weekday in days.upper()
+                )
+                if not day_ok:
+                    continue
+
+                sched_time = sub.get("report_time", "")
+                if not sched_time:
+                    continue
+
+                sh, sm = map(int, sched_time.split(":"))
+                sched_min = sh * 60 + sm
+                key = str(sub["id"])
+
+                if abs(current_minute - sched_min) <= 1 and _fired.get(key) != current_time:
+                    _fired[key] = current_time
+                    content, error = await _send_report(sub)
+                    store.save_report_history(
+                        subscription_id=sub["id"], user_id=sub["user_id"],
+                        status="success" if not error else "failed",
+                        content=content, error_reason=error,
+                        channels=sub.get("channels", "TELEGRAM"),
+                    )
+                    if error:
+                        logger.warning(f"Report failed [{sub.get('name')}]: {error}")
+                    else:
+                        logger.info(f"Report sent: {sub.get('name')} @ {current_time}")
+
+        except asyncio.CancelledError:
+            break
+        except Exception as e:
+            logger.error(f"Report scheduler error: {e}", exc_info=True)
+
+        await asyncio.sleep(60)
+
+
 async def _start_telegram_bot():
     """Run the Telegram bot inside the FastAPI process."""
     try:
@@ -277,6 +390,7 @@ async def lifespan(app: FastAPI):
 
     scanner_task = asyncio.create_task(_background_scanner())
     schedule_task = asyncio.create_task(_schedule_checker())
+    report_task = asyncio.create_task(_report_scheduler())
     bot_app = await _start_telegram_bot()
 
     yield
@@ -284,7 +398,8 @@ async def lifespan(app: FastAPI):
     logger.info("Shutting down...")
     scanner_task.cancel()
     schedule_task.cancel()
-    await asyncio.gather(scanner_task, schedule_task, return_exceptions=True)
+    report_task.cancel()
+    await asyncio.gather(scanner_task, schedule_task, report_task, return_exceptions=True)
 
     if bot_app:
         await bot_app.updater.stop()

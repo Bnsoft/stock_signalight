@@ -612,6 +612,29 @@ def init_db() -> None:
                 fired_at       DATETIME DEFAULT CURRENT_TIMESTAMP
             );
 
+            CREATE TABLE IF NOT EXISTS report_subscriptions (
+                id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id     TEXT NOT NULL,
+                name        TEXT NOT NULL,
+                symbols     TEXT NOT NULL,
+                report_time TEXT NOT NULL,
+                days        TEXT DEFAULT 'weekdays',
+                channels    TEXT DEFAULT 'TELEGRAM',
+                is_active   INTEGER DEFAULT 1,
+                created_at  DATETIME DEFAULT CURRENT_TIMESTAMP
+            );
+
+            CREATE TABLE IF NOT EXISTS report_history (
+                id              INTEGER PRIMARY KEY AUTOINCREMENT,
+                subscription_id INTEGER NOT NULL,
+                user_id         TEXT NOT NULL,
+                sent_at         DATETIME DEFAULT CURRENT_TIMESTAMP,
+                status          TEXT NOT NULL,
+                content         TEXT,
+                error_reason    TEXT,
+                channels        TEXT
+            );
+
             CREATE TABLE IF NOT EXISTS schedule_run_log (
                 id             INTEGER PRIMARY KEY AUTOINCREMENT,
                 alert_id       INTEGER NOT NULL,
@@ -1236,6 +1259,88 @@ def delete_user(user_id: str) -> bool:
         )
     logger.info(f"Deleted user: {user_id}")
     return True
+
+
+# ─── Report Subscriptions ────────────────────────────────
+
+def create_report_subscription(user_id: str, name: str, symbols: list, report_time: str,
+                                days: str = "weekdays", channels: list = None) -> dict:
+    from datetime import datetime
+    if channels is None:
+        channels = ["TELEGRAM"]
+    with _connect() as conn:
+        cur = conn.execute(
+            """INSERT INTO report_subscriptions (user_id, name, symbols, report_time, days, channels, created_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?)""",
+            (user_id, name, ",".join(symbols), report_time, days, ",".join(channels), datetime.utcnow().isoformat()),
+        )
+        conn.commit()
+        row = conn.execute("SELECT * FROM report_subscriptions WHERE id = ?", (cur.lastrowid,)).fetchone()
+        return dict(row) if row else {}
+
+
+def get_report_subscriptions(user_id: str) -> list[dict]:
+    with _connect() as conn:
+        rows = conn.execute(
+            "SELECT * FROM report_subscriptions WHERE user_id = ? ORDER BY created_at DESC", (user_id,)
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def update_report_subscription(sub_id: int, **kwargs) -> dict | None:
+    if not kwargs:
+        return None
+    if "symbols" in kwargs and isinstance(kwargs["symbols"], list):
+        kwargs["symbols"] = ",".join(kwargs["symbols"])
+    if "channels" in kwargs and isinstance(kwargs["channels"], list):
+        kwargs["channels"] = ",".join(kwargs["channels"])
+    set_clause = ", ".join(f"{k} = ?" for k in kwargs)
+    with _connect() as conn:
+        conn.execute(f"UPDATE report_subscriptions SET {set_clause} WHERE id = ?", [*kwargs.values(), sub_id])
+        conn.commit()
+        row = conn.execute("SELECT * FROM report_subscriptions WHERE id = ?", (sub_id,)).fetchone()
+        return dict(row) if row else None
+
+
+def delete_report_subscription(sub_id: int) -> bool:
+    with _connect() as conn:
+        conn.execute("DELETE FROM report_subscriptions WHERE id = ?", (sub_id,))
+        conn.commit()
+    return True
+
+
+def save_report_history(subscription_id: int, user_id: str, status: str,
+                        content: str = None, error_reason: str = None, channels: str = None) -> None:
+    from datetime import datetime
+    with _connect() as conn:
+        conn.execute(
+            """INSERT INTO report_history (subscription_id, user_id, sent_at, status, content, error_reason, channels)
+               VALUES (?, ?, ?, ?, ?, ?, ?)""",
+            (subscription_id, user_id, datetime.utcnow().isoformat(), status,
+             content[:1000] if content else None,
+             error_reason[:300] if error_reason else None, channels),
+        )
+        conn.commit()
+
+
+def get_report_history(user_id: str, limit: int = 50) -> list[dict]:
+    with _connect() as conn:
+        rows = conn.execute(
+            """SELECT rh.*, rs.name as subscription_name
+               FROM report_history rh
+               LEFT JOIN report_subscriptions rs ON rh.subscription_id = rs.id
+               WHERE rh.user_id = ? ORDER BY rh.sent_at DESC LIMIT ?""",
+            (user_id, limit),
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def get_active_report_subscriptions() -> list[dict]:
+    with _connect() as conn:
+        rows = conn.execute(
+            "SELECT * FROM report_subscriptions WHERE is_active = 1"
+        ).fetchall()
+    return [dict(r) for r in rows]
 
 
 # ─── Schedule Run Log ────────────────────────────────────
