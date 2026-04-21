@@ -8,6 +8,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from .error_handlers import setup_error_handlers
+from . import store
 
 logger = logging.getLogger(__name__)
 
@@ -115,7 +116,6 @@ async def _schedule_checker():
             current_minute = now.hour * 60 + now.minute
             weekday = now.strftime("%a").upper()[:3]
 
-            from . import store
             with store._connect() as conn:
                 scheduled = []
                 for table, category in [("price_alerts", "PRICE"), ("indicator_alerts", "INDICATOR"), ("volume_alerts", "VOLUME")]:
@@ -225,9 +225,20 @@ async def _schedule_checker():
                         tg += "✅ 조건 미충족"
 
                     await send_message(tg)
+                    store.save_schedule_run_log(
+                        alert_id=alert["id"], alert_category=alert["category"],
+                        symbol=alert["symbol"], schedule_type=stype,
+                        status="success", triggered=bool(triggered),
+                        message_sent=tg[:500],
+                    )
                     logger.info(f"Scheduled [{stype}] fired OK: {alert['symbol']} @ {current_time}")
 
                 except Exception as e:
+                    store.save_schedule_run_log(
+                        alert_id=alert["id"], alert_category=alert["category"],
+                        symbol=alert.get("symbol", "?"), schedule_type=stype,
+                        status="failed", error_reason=str(e)[:300],
+                    )
                     logger.warning(f"Scheduled alert error [{alert.get('symbol')}]: {e}", exc_info=True)
 
         except asyncio.CancelledError:

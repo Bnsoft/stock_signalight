@@ -720,6 +720,18 @@ async def export_alerts(user_id: str, format: str = "csv"):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+# ─── Schedule Run Logs ───────────────────────────────────
+
+@app.get("/api/alerts/schedule-logs")
+async def get_schedule_logs(user_id: str, limit: int = 100):
+    """Return schedule run log history."""
+    try:
+        logs = db_store.get_schedule_run_logs(user_id=user_id, limit=limit)
+        return {"logs": logs, "count": len(logs)}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 # ─── WebSocket (signal stream) ───────────────────────────
 
 _ws_clients: list[WebSocket] = []

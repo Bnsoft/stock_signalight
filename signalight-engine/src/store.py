@@ -611,6 +611,19 @@ def init_db() -> None:
                 alert_category TEXT NOT NULL,
                 fired_at       DATETIME DEFAULT CURRENT_TIMESTAMP
             );
+
+            CREATE TABLE IF NOT EXISTS schedule_run_log (
+                id             INTEGER PRIMARY KEY AUTOINCREMENT,
+                alert_id       INTEGER NOT NULL,
+                alert_category TEXT NOT NULL,
+                symbol         TEXT NOT NULL,
+                schedule_type  TEXT NOT NULL,
+                fired_at       DATETIME DEFAULT CURRENT_TIMESTAMP,
+                status         TEXT NOT NULL,
+                triggered      INTEGER DEFAULT 0,
+                message_sent   TEXT,
+                error_reason   TEXT
+            );
         """)
 
     # Add schedule columns to existing alert tables (idempotent migrations)
@@ -1223,3 +1236,50 @@ def delete_user(user_id: str) -> bool:
         )
     logger.info(f"Deleted user: {user_id}")
     return True
+
+
+# ─── Schedule Run Log ────────────────────────────────────
+
+def save_schedule_run_log(
+    alert_id: int,
+    alert_category: str,
+    symbol: str,
+    schedule_type: str,
+    status: str,          # "success" | "failed" | "skipped"
+    triggered: bool = False,
+    message_sent: str = None,
+    error_reason: str = None,
+) -> None:
+    from datetime import datetime
+    with _connect() as conn:
+        conn.execute(
+            """INSERT INTO schedule_run_log
+               (alert_id, alert_category, symbol, schedule_type, fired_at,
+                status, triggered, message_sent, error_reason)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (alert_id, alert_category, symbol, schedule_type,
+             datetime.utcnow().isoformat(),
+             status, 1 if triggered else 0, message_sent, error_reason),
+        )
+        conn.commit()
+
+
+def get_schedule_run_logs(user_id: str = None, limit: int = 100) -> list[dict]:
+    """Return recent schedule run logs, joined with alert symbol info."""
+    with _connect() as conn:
+        rows = conn.execute(
+            """SELECT id, alert_id, alert_category, symbol, schedule_type,
+                      fired_at, status, triggered, message_sent, error_reason
+               FROM schedule_run_log
+               ORDER BY fired_at DESC LIMIT ?""",
+            (limit,),
+        ).fetchall()
+    return [
+        {
+            "id": r[0], "alert_id": r[1], "alert_category": r[2],
+            "symbol": r[3], "schedule_type": r[4], "fired_at": r[5],
+            "status": r[6], "triggered": bool(r[7]),
+            "message_sent": r[8], "error_reason": r[9],
+        }
+        for r in rows
+    ]

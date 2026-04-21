@@ -22,6 +22,19 @@ import { ToastContainer } from "@/components/ToastContainer"
 import { Pagination } from "@/components/Pagination"
 import { MAChart } from "@/components/dashboard/MAChart"
 
+interface ScheduleLog {
+  id: number
+  alert_id: number
+  alert_category: string
+  symbol: string
+  schedule_type: string
+  fired_at: string
+  status: "success" | "failed" | "skipped"
+  triggered: boolean
+  message_sent?: string
+  error_reason?: string
+}
+
 interface Alert {
   id: string
   type: string
@@ -64,6 +77,9 @@ export default function AlertsPage() {
 
   const [alerts, setAlerts] = useState<Alert[]>([])
   const [loading, setLoading] = useState(false)
+  const [activeTab, setActiveTab] = useState<"alerts" | "logs">("alerts")
+  const [logs, setLogs] = useState<ScheduleLog[]>([])
+  const [logsLoading, setLogsLoading] = useState(false)
   const [showAddForm, setShowAddForm] = useState(false)
   const [editingAlert, setEditingAlert] = useState<Alert | null>(null)
   const [runningId, setRunningId] = useState<string | null>(null)
@@ -104,6 +120,10 @@ export default function AlertsPage() {
     pagination.setTotal(alerts.length)
   }, [alerts])
 
+  useEffect(() => {
+    if (activeTab === "logs") loadLogs()
+  }, [activeTab])
+
   // Fetch MA preview when type=ma + symbol or timeframe changes
   useEffect(() => {
     if (selectedType === "ma" && formData.symbol.length >= 1) {
@@ -112,6 +132,19 @@ export default function AlertsPage() {
       setMaPreview(null)
     }
   }, [selectedType, formData.symbol, formData.maTimeframe])
+
+  const loadLogs = async () => {
+    if (!user?.user_id) return
+    setLogsLoading(true)
+    try {
+      const res = await fetch(`${API_BASE}/api/alerts/schedule-logs?user_id=${user.user_id}&limit=100`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      if (!res.ok) return
+      const data = await res.json()
+      setLogs(data.logs || [])
+    } catch { } finally { setLogsLoading(false) }
+  }
 
   const handleSymbolInput = useCallback((value: string) => {
     setFormData((prev) => ({ ...prev, symbol: value.toUpperCase() }))
@@ -445,21 +478,33 @@ export default function AlertsPage() {
     <div className="min-h-screen bg-[#f5f4ed] p-8">
       <div className="max-w-3xl mx-auto">
         <AnimateIn from="bottom">
-          <div className="mb-8 flex items-center justify-between">
+          <div className="mb-6 flex items-start justify-between">
             <div>
               <h1 className="text-3xl font-medium text-[#141413] leading-tight mb-1" style={{ fontFamily: "Georgia, serif" }}>알람 관리</h1>
               <p className="text-[#87867f] text-sm">가격·이동평균선·거래량 알람을 설정하세요</p>
             </div>
-            <button
-              onClick={() => { setEditingAlert(null); setFormData(defaultForm); setShowAddForm(!showAddForm) }}
-              className="flex items-center gap-2 px-5 py-2.5 bg-[#c96442] hover:bg-[#b8573b] text-[#faf9f5] rounded-xl text-sm font-medium transition-colors shadow-[0px_0px_0px_1px_#c96442]"
-            >
-              <Plus size={16} /> 새 알람
-            </button>
+            {activeTab === "alerts" && (
+              <button
+                onClick={() => { setEditingAlert(null); setFormData(defaultForm); setShowAddForm(!showAddForm) }}
+                className="flex items-center gap-2 px-5 py-2.5 bg-[#c96442] hover:bg-[#b8573b] text-[#faf9f5] rounded-xl text-sm font-medium transition-colors shadow-[0px_0px_0px_1px_#c96442]"
+              >
+                <Plus size={16} /> 새 알람
+              </button>
+            )}
+          </div>
+
+          {/* Tabs */}
+          <div className="flex gap-1 mb-6 bg-[#e8e6dc] rounded-xl p-1 w-fit">
+            {[{ key: "alerts", label: "알람 목록" }, { key: "logs", label: "실행 로그" }].map(tab => (
+              <button key={tab.key} onClick={() => setActiveTab(tab.key as "alerts" | "logs")}
+                className={`px-5 py-2 rounded-lg text-sm font-medium transition-all ${activeTab === tab.key ? "bg-[#faf9f5] text-[#141413] shadow-[rgba(0,0,0,0.06)_0px_2px_8px]" : "text-[#5e5d59] hover:text-[#141413]"}`}>
+                {tab.label}
+              </button>
+            ))}
           </div>
         </AnimateIn>
 
-        {showAddForm && (
+        {activeTab === "alerts" && showAddForm && (
           <AnimateIn from="bottom" delay={60}>
             <div className="bg-[#faf9f5] border border-[#f0eee6] rounded-2xl p-6 mb-5 shadow-[rgba(0,0,0,0.05)_0px_4px_24px]">
               <h2 className="text-base font-medium text-[#141413] mb-5" style={{ fontFamily: "Georgia, serif" }}>
@@ -723,7 +768,73 @@ export default function AlertsPage() {
           </AnimateIn>
         )}
 
-        <AnimateIn from="bottom" delay={120}>
+        {activeTab === "logs" && (
+          <AnimateIn from="bottom" delay={60}>
+            <div className="bg-[#faf9f5] border border-[#f0eee6] rounded-2xl overflow-hidden shadow-[rgba(0,0,0,0.05)_0px_4px_24px]">
+              <div className="flex items-center justify-between px-5 py-4 border-b border-[#f0eee6]">
+                <p className="text-xs font-medium text-[#87867f] uppercase tracking-wide">스케줄 실행 로그</p>
+                <button onClick={loadLogs} className="text-xs text-[#c96442] hover:underline">새로고침</button>
+              </div>
+              {logsLoading ? (
+                <div className="py-10 text-center text-[#87867f] text-sm">로딩 중...</div>
+              ) : logs.length === 0 ? (
+                <div className="py-10 text-center text-[#87867f] text-sm">실행 기록이 없습니다</div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-[#f0eee6]">
+                        {["시간", "심볼", "구분", "상태", "조건충족", "메시지/오류"].map(h => (
+                          <th key={h} className="text-left px-4 py-3 text-xs font-medium text-[#87867f] uppercase tracking-wide whitespace-nowrap">{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {logs.map(log => (
+                        <tr key={log.id} className="border-b border-[#f0eee6]/50 hover:bg-[#f5f4ed] transition-colors">
+                          <td className="px-4 py-3 text-xs text-[#87867f] whitespace-nowrap font-mono">
+                            {new Date(log.fired_at).toLocaleString("ko-KR", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })}
+                          </td>
+                          <td className="px-4 py-3 font-medium text-[#141413]">{log.symbol}</td>
+                          <td className="px-4 py-3 text-xs text-[#87867f]">
+                            {log.schedule_type === "once" ? "⏰ 특정시간" : `🔁 ${log.schedule_type}`}
+                          </td>
+                          <td className="px-4 py-3">
+                            <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${
+                              log.status === "success" ? "bg-[#2d6a4f]/10 text-[#2d6a4f]" :
+                              log.status === "failed" ? "bg-[#b53333]/10 text-[#b53333]" :
+                              "bg-[#e8e6dc] text-[#87867f]"
+                            }`}>
+                              {log.status === "success" ? "✓ 성공" : log.status === "failed" ? "✗ 실패" : "건너뜀"}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-center">
+                            {log.status === "success" ? (
+                              <span className={`text-xs font-medium ${log.triggered ? "text-[#c96442]" : "text-[#87867f]"}`}>
+                                {log.triggered ? "🚨 충족" : "✅ 미충족"}
+                              </span>
+                            ) : <span className="text-[#b0aea5]">—</span>}
+                          </td>
+                          <td className="px-4 py-3 text-xs text-[#5e5d59] max-w-xs">
+                            {log.error_reason ? (
+                              <span className="text-[#b53333]">{log.error_reason}</span>
+                            ) : log.message_sent ? (
+                              <span className="truncate block max-w-[200px]" title={log.message_sent}>
+                                {log.message_sent.replace(/<[^>]+>/g, "").slice(0, 60)}...
+                              </span>
+                            ) : "—"}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </AnimateIn>
+        )}
+
+        {activeTab === "alerts" && <AnimateIn from="bottom" delay={120}>
           <div className="space-y-3">
             {loading ? (
               <div className="text-center py-12 text-[#87867f]">로딩 중...</div>
@@ -814,7 +925,7 @@ export default function AlertsPage() {
               </>
             )}
           </div>
-        </AnimateIn>
+        </AnimateIn>}
 
         {/* Run result modal */}
         {runResult && (() => {
