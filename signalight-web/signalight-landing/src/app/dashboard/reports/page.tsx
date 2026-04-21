@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef, useCallback } from "react"
 import { useAuth } from "@/context/AuthContext"
 import { AnimateIn } from "@/components/layout/AnimateIn"
 import { Plus, Trash2, Play, ToggleLeft, Clock, FileBarChart } from "lucide-react"
@@ -52,12 +52,42 @@ export default function ReportsPage() {
   const [showForm, setShowForm] = useState(false)
   const [runningId, setRunningId] = useState<number | null>(null)
   const [expandedLog, setExpandedLog] = useState<number | null>(null)
+  const [searchResults, setSearchResults] = useState<{ symbol: string; name: string; type: string }[]>([])
+  const [showDropdown, setShowDropdown] = useState(false)
+  const searchTimeout = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const dropdownRef = useRef<HTMLDivElement>(null)
 
   const defaultForm = {
     name: "", symbols: "", report_time: "08:00",
     days: "weekdays", channels: [] as string[],
   }
   const [form, setForm] = useState(defaultForm)
+
+  // 마지막으로 입력된 토큰(공백/쉼표 이후 현재 입력중인 심볼)을 검색
+  const handleSymbolInput = useCallback((raw: string) => {
+    setForm(f => ({ ...f, symbols: raw.toUpperCase() }))
+    const parts = raw.split(/[\s,]+/)
+    const current = parts[parts.length - 1].trim()
+    if (searchTimeout.current) clearTimeout(searchTimeout.current)
+    if (current.length < 1) { setSearchResults([]); setShowDropdown(false); return }
+    searchTimeout.current = setTimeout(async () => {
+      try {
+        const res = await fetch(`${API_BASE}/api/search?q=${encodeURIComponent(current)}`)
+        const data = await res.json()
+        setSearchResults(data.results || [])
+        setShowDropdown(true)
+      } catch { setSearchResults([]) }
+    }, 250)
+  }, [])
+
+  const selectSymbol = (sym: string) => {
+    // 현재 입력된 마지막 토큰을 선택된 심볼로 교체
+    const parts = form.symbols.split(/[\s,]+/).filter(Boolean)
+    parts[parts.length > 0 ? parts.length - 1 : 0] = sym
+    setForm(f => ({ ...f, symbols: parts.join(" ") + " " }))
+    setShowDropdown(false)
+    setSearchResults([])
+  }
 
   const load = async () => {
     if (!user?.user_id) return
@@ -172,10 +202,40 @@ export default function ReportsPage() {
                   <input type="text" placeholder="예: 오전 데일리 리포트" value={form.name}
                     onChange={e => setForm(f => ({ ...f, name: e.target.value }))} className={inputCls} />
                 </div>
-                <div>
+                <div className="relative" ref={dropdownRef}>
                   <label className={labelCls}>심볼 (쉼표 또는 공백 구분)</label>
-                  <input type="text" placeholder="예: QQQ SPY AAPL TQQQ" value={form.symbols}
-                    onChange={e => setForm(f => ({ ...f, symbols: e.target.value.toUpperCase() }))} className={inputCls} />
+                  <input
+                    type="text"
+                    placeholder="예: QQQ SPY AAPL TQQQ"
+                    value={form.symbols}
+                    onChange={e => handleSymbolInput(e.target.value)}
+                    onBlur={() => setTimeout(() => setShowDropdown(false), 150)}
+                    onFocus={() => searchResults.length > 0 && setShowDropdown(true)}
+                    autoComplete="off"
+                    className={inputCls}
+                  />
+                  {showDropdown && searchResults.length > 0 && (
+                    <div className="absolute z-50 w-full mt-1 bg-[#faf9f5] border border-[#f0eee6] rounded-xl shadow-[rgba(0,0,0,0.1)_0px_8px_24px] overflow-hidden">
+                      {searchResults.map(r => (
+                        <button key={r.symbol} type="button" onMouseDown={() => selectSymbol(r.symbol)}
+                          className="w-full flex items-center justify-between px-4 py-2.5 hover:bg-[#f5f4ed] text-left transition-colors">
+                          <div>
+                            <span className="font-medium text-sm text-[#141413]">{r.symbol}</span>
+                            <span className="text-xs text-[#87867f] ml-2">{r.name}</span>
+                          </div>
+                          <span className="text-xs text-[#b0aea5] shrink-0">{r.type}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  {/* 추가된 심볼 태그 미리보기 */}
+                  {form.symbols.trim() && (
+                    <div className="flex flex-wrap gap-1.5 mt-2">
+                      {form.symbols.split(/[\s,]+/).filter(Boolean).map(s => (
+                        <span key={s} className="px-2 py-0.5 bg-[#e8e6dc] rounded-lg text-xs font-mono font-medium text-[#4d4c48]">{s}</span>
+                      ))}
+                    </div>
+                  )}
                 </div>
                 <div>
                   <label className={labelCls}>발송 시간</label>
