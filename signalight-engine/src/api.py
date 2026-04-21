@@ -301,17 +301,23 @@ async def trigger_scan():
 # ─── Chart / Quote ───────────────────────────────────────
 
 @app.get("/api/chart/{symbol}")
-async def get_chart(symbol: str, interval: str = "1d", period: str = "6mo"):
+async def get_chart(symbol: str, interval: str = "1d", period: str = "6mo",
+                    start: Optional[str] = None, end: Optional[str] = None):
+    """OHLCV data. Use start/end (YYYY-MM-DD) for range queries, or period for relative."""
     try:
         import yfinance as yf
         sym = symbol.upper()
         intraday = interval in ("1m", "5m", "15m", "30m", "60m", "1h")
-        if intraday and period not in ("1d", "5d", "1mo"):
-            period = "5d"
 
-        df = await asyncio.get_event_loop().run_in_executor(
-            None, lambda: yf.Ticker(sym).history(period=period, interval=interval)
-        )
+        def _fetch():
+            t = yf.Ticker(sym)
+            if start:
+                return t.history(start=start, end=end, interval=interval)
+            if intraday and period not in ("1d", "5d", "1mo"):
+                return t.history(period="5d", interval=interval)
+            return t.history(period=period, interval=interval)
+
+        df = await asyncio.get_event_loop().run_in_executor(None, _fetch)
         if df.empty:
             raise HTTPException(status_code=404, detail=f"No data for {sym}")
 
@@ -321,7 +327,7 @@ async def get_chart(symbol: str, interval: str = "1d", period: str = "6mo"):
              "close": round(float(r["Close"]), 4), "volume": int(r["Volume"])}
             for ts, r in df.iterrows()
         ]
-        return {"symbol": sym, "interval": interval, "period": period, "candles": candles, "count": len(candles)}
+        return {"symbol": sym, "interval": interval, "candles": candles, "count": len(candles)}
     except HTTPException:
         raise
     except Exception as e:
