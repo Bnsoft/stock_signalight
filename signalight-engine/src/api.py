@@ -823,6 +823,13 @@ async def run_report_now(sub_id: int, user_id: str):
 
         from .main import _send_report
         content, error = await _send_report(sub)
+        db_store.save_report_history(
+            subscription_id=sub_id, user_id=user_id,
+            status="success" if not error else "failed",
+            content=content, error_reason=error,
+            channels=sub.get("channels", "TELEGRAM") if isinstance(sub.get("channels"), str)
+                     else ",".join(sub.get("channels", ["TELEGRAM"])),
+        )
         return {"status": "success" if not error else "failed", "content": content, "error": error}
     except HTTPException:
         raise
