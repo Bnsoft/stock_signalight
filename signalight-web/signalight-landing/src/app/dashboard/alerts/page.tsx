@@ -62,6 +62,7 @@ export default function AlertsPage() {
   const [showAddForm, setShowAddForm] = useState(false)
   const [editingAlert, setEditingAlert] = useState<Alert | null>(null)
   const [runningId, setRunningId] = useState<string | null>(null)
+  const [runResult, setRunResult] = useState<Record<string, unknown> | null>(null)
   const [selectedType, setSelectedType] = useState("price")
   const [searchResults, setSearchResults] = useState<{ symbol: string; name: string; type: string }[]>([])
   const [showDropdown, setShowDropdown] = useState(false)
@@ -266,14 +267,16 @@ export default function AlertsPage() {
   const handleRunAlert = async (alertId: string) => {
     const [alertType, rawId] = alertId.split(":")
     setRunningId(alertId)
+    setRunResult(null)
     try {
       const res = await fetch(`${API_BASE}/api/alerts/${rawId}/run?alert_category=${alertType}`, {
         method: "POST",
         headers: { Authorization: `Bearer ${token}` },
       })
       const data = await res.json()
-      if (data.status === "triggered") success(`알람 발동! ${data.count}개 조건 충족`)
-      else if (data.status === "not_triggered") showError(`조건 미충족 (현재가: $${data.price?.toFixed(2)})`)
+      setRunResult(data)
+      if (data.status === "triggered") success(`알람 조건 충족! 텔레그램 발송 완료`)
+      else if (data.status === "not_triggered") success("분석 완료 (조건 미충족) — 텔레그램 발송 완료")
       else showError("데이터 없음")
     } catch { showError("실행 실패") } finally { setRunningId(null) }
   }
@@ -628,6 +631,74 @@ export default function AlertsPage() {
             )}
           </div>
         </AnimateIn>
+
+        {/* Run result modal */}
+        {runResult && (() => {
+          const s = runResult.snapshot as Record<string, unknown> | undefined
+          const triggered = runResult.status === "triggered"
+          const msgs = runResult.triggered_alerts as string[] | undefined
+          return (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#141413]/50">
+              <div className="bg-[#faf9f5] border border-[#f0eee6] rounded-2xl p-6 w-full max-w-md shadow-[rgba(0,0,0,0.15)_0px_16px_48px] mx-4">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="font-medium text-[#141413]" style={{ fontFamily: "Georgia, serif" }}>
+                    실행 결과 — {s?.symbol as string}
+                  </h3>
+                  <button onClick={() => setRunResult(null)} className="text-[#87867f] hover:text-[#141413] text-lg leading-none">×</button>
+                </div>
+
+                <div className={`mb-4 px-4 py-2.5 rounded-xl text-sm font-medium ${triggered ? "bg-[#2d6a4f]/10 text-[#2d6a4f]" : "bg-[#e8e6dc] text-[#5e5d59]"}`}>
+                  {triggered ? `🚨 조건 충족 (${(runResult.triggered_count as number)}개)` : "✅ 조건 미충족"} — 텔레그램 발송 완료
+                </div>
+
+                {msgs && msgs.length > 0 && (
+                  <div className="mb-4 space-y-1">
+                    {msgs.map((m, i) => <p key={i} className="text-xs text-[#c96442]">• {m}</p>)}
+                  </div>
+                )}
+
+                {s && (
+                  <div className="space-y-2">
+                    <div className="flex justify-between py-2 border-b border-[#f0eee6]">
+                      <span className="text-xs text-[#87867f]">현재가</span>
+                      <span className="text-sm font-medium text-[#141413]">${s.price as number}</span>
+                    </div>
+                    {[["MA5", s.ma5], ["MA20", s.ma20], ["MA50", s.ma50], ["MA120", s.ma120], ["MA200", s.ma200]].map(([label, val]) => val && (
+                      <div key={label as string} className="flex justify-between py-1.5 border-b border-[#f0eee6]/50">
+                        <span className="text-xs text-[#87867f]">{label as string}</span>
+                        <span className="text-xs font-medium text-[#141413]">
+                          ${(val as number).toFixed(2)}
+                          <span className={`ml-1.5 ${(s.price as number) > (val as number) ? "text-[#2d6a4f]" : "text-[#b53333]"}`}>
+                            {(s.price as number) > (val as number) ? "↑" : "↓"}
+                          </span>
+                        </span>
+                      </div>
+                    ))}
+                    <div className="flex justify-between py-2 border-b border-[#f0eee6]">
+                      <span className="text-xs text-[#87867f]">RSI</span>
+                      <span className="text-xs font-medium text-[#141413]">{s.rsi ? `${s.rsi}` : "—"}</span>
+                    </div>
+                    <div className="flex justify-between py-2 border-b border-[#f0eee6]">
+                      <span className="text-xs text-[#87867f]">Drawdown</span>
+                      <span className="text-xs font-medium text-[#141413]">{s.drawdown_pct ? `${s.drawdown_pct}%` : "—"}</span>
+                    </div>
+                    <div className="flex justify-between py-2">
+                      <span className="text-xs text-[#87867f]">거래량 (1y평균 대비)</span>
+                      <span className="text-xs font-medium text-[#141413]">
+                        {(s.volume_vs_avg_pct as number) >= 0 ? "+" : ""}{s.volume_vs_avg_pct as number}%
+                      </span>
+                    </div>
+                  </div>
+                )}
+
+                <button onClick={() => setRunResult(null)}
+                  className="w-full mt-5 py-2.5 bg-[#e8e6dc] hover:bg-[#d1cfc5] text-[#4d4c48] rounded-xl text-sm font-medium transition-colors">
+                  닫기
+                </button>
+              </div>
+            </div>
+          )
+        })()}
 
         <ToastContainer toasts={toasts} onRemove={removeToast} />
       </div>

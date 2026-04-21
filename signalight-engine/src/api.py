@@ -479,7 +479,7 @@ async def update_alert(alert_id: int, alert_category: str, req: AlertUpdateReque
 
 @app.post("/api/alerts/{alert_id}/run")
 async def run_alert_now(alert_id: int, alert_category: str):
-    """Manually trigger an alert check and send Telegram if condition is met."""
+    """Manually trigger an alert check. Returns full market snapshot + sends Telegram."""
     table_map = {"PRICE": "price_alerts", "INDICATOR": "indicator_alerts", "VOLUME": "volume_alerts"}
     table = table_map.get(alert_category.upper())
     if not table:
@@ -494,7 +494,7 @@ async def run_alert_now(alert_id: int, alert_category: str):
         symbol = alert["symbol"]
 
         from .market import fetch_daily_data
-        from .pulse import get_all_indicators
+        from .pulse import get_all_indicators, calculate_ma
         from .alerts_checker import check_user_alerts
 
         df = await asyncio.get_event_loop().run_in_executor(None, fetch_daily_data, symbol, "1y")
@@ -502,20 +502,72 @@ async def run_alert_now(alert_id: int, alert_category: str):
             return {"status": "no_data", "symbol": symbol}
 
         indicators = get_all_indicators(df)
-        current_price = indicators.get("current_price", 0)
-        current_volume = float(df["Volume"].iloc[-1]) if "Volume" in df.columns else 0
-        avg_volume = float(df["Volume"].tail(20).mean()) if "Volume" in df.columns else 0
+        price = indicators.get("current_price", 0)
+        current_volume = int(df["Volume"].iloc[-1]) if "Volume" in df.columns else 0
+        avg_volume_1y = int(df["Volume"].tail(252).mean()) if "Volume" in df.columns else 0
+        vol_pct = round((current_volume - avg_volume_1y) / avg_volume_1y * 100, 1) if avg_volume_1y else 0
 
-        triggered = check_user_alerts(symbol, df, current_price, current_volume, avg_volume)
-        fired = [a for a in triggered if str(a.get("alert_id", "")) == str(alert_id) or True]
+        rsi_key = next((k for k in indicators if k.startswith("rsi_")), None)
+        rsi = indicators.get(rsi_key) if rsi_key else None
+        dd = indicators.get("drawdown_pct")
+        ath = indicators.get("ath")
 
+        mas = {p: calculate_ma(df, p) for p in (5, 20, 50, 120, 200)}
+
+        snapshot = {
+            "symbol": symbol,
+            "price": round(price, 2),
+            "rsi": round(rsi, 1) if rsi else None,
+            "drawdown_pct": round(dd, 1) if dd is not None else None,
+            "ath": round(ath, 2) if ath else None,
+            "ma5": round(mas[5], 2) if mas[5] else None,
+            "ma20": round(mas[20], 2) if mas[20] else None,
+            "ma50": round(mas[50], 2) if mas[50] else None,
+            "ma120": round(mas[120], 2) if mas[120] else None,
+            "ma200": round(mas[200], 2) if mas[200] else None,
+            "volume": current_volume,
+            "avg_volume_1y": avg_volume_1y,
+            "volume_vs_avg_pct": vol_pct,
+        }
+
+        triggered = check_user_alerts(symbol, df, price, current_volume, avg_volume_1y)
+
+        def _arrow(p, ma):
+            return "↑" if p and ma and p > ma else "↓" if p and ma else "—"
+
+        # Send detailed Telegram message
+        from .alert import send_message
+        vol_sign = "+" if vol_pct >= 0 else ""
+        tg_text = (
+            f"🔔 <b>수동 실행</b> — {symbol}\n"
+            f"{'─' * 22}\n"
+            f"<b>현재가:</b> ${price:.2f}\n"
+            f"{'─' * 22}\n"
+            f"<b>이동평균선</b>\n"
+            f"  MA5:   {f'${mas[5]:.2f}' if mas[5] else '—'} {_arrow(price, mas[5])}\n"
+            f"  MA20:  {f'${mas[20]:.2f}' if mas[20] else '—'} {_arrow(price, mas[20])}\n"
+            f"  MA50:  {f'${mas[50]:.2f}' if mas[50] else '—'} {_arrow(price, mas[50])}\n"
+            f"  MA120: {f'${mas[120]:.2f}' if mas[120] else '—'} {_arrow(price, mas[120])}\n"
+            f"  MA200: {f'${mas[200]:.2f}' if mas[200] else '—'} {_arrow(price, mas[200])}\n"
+            f"{'─' * 22}\n"
+            f"<b>RSI:</b>      {f'{rsi:.1f}' if rsi else '—'}\n"
+            f"<b>Drawdown:</b> {f'{dd:.1f}%' if dd is not None else '—'}"
+            f"{f' (ATH ${ath:.2f})' if ath else ''}\n"
+            f"<b>거래량:</b>   {current_volume:,} ({vol_sign}{vol_pct}% vs 1y평균)\n"
+        )
         if triggered:
-            from .alert import send_message
-            for ua in triggered:
-                await send_message(f"🔔 <b>수동 실행 알람</b>\n{ua['message']}")
-            return {"status": "triggered", "count": len(triggered), "symbol": symbol}
+            tg_text += f"{'─' * 22}\n🚨 알람 조건 충족!\n" + "\n".join(f"  • {ua['message']}" for ua in triggered)
+        else:
+            tg_text += f"{'─' * 22}\n✅ 조건 미충족"
 
-        return {"status": "not_triggered", "symbol": symbol, "price": current_price}
+        await send_message(tg_text)
+
+        return {
+            "status": "triggered" if triggered else "not_triggered",
+            "triggered_count": len(triggered),
+            "snapshot": snapshot,
+            "triggered_alerts": [ua["message"] for ua in triggered],
+        }
     except HTTPException:
         raise
     except Exception as e:
