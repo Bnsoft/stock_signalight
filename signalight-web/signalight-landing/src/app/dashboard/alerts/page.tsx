@@ -67,6 +67,9 @@ export default function AlertsPage() {
   const [editingAlert, setEditingAlert] = useState<Alert | null>(null)
   const [runningId, setRunningId] = useState<string | null>(null)
   const [runResult, setRunResult] = useState<Record<string, unknown> | null>(null)
+  const [maPreview, setMaPreview] = useState<Record<string, number | null> | null>(null)
+  const [maPreviewLoading, setMaPreviewLoading] = useState(false)
+  const maPreviewTimeout = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [selectedType, setSelectedType] = useState("price")
   const [searchResults, setSearchResults] = useState<{ symbol: string; name: string; type: string }[]>([])
   const [showDropdown, setShowDropdown] = useState(false)
@@ -100,6 +103,15 @@ export default function AlertsPage() {
     pagination.setTotal(alerts.length)
   }, [alerts])
 
+  // Fetch MA preview when type=ma + symbol or timeframe changes
+  useEffect(() => {
+    if (selectedType === "ma" && formData.symbol.length >= 1) {
+      fetchMaPreview(formData.symbol, formData.maTimeframe)
+    } else {
+      setMaPreview(null)
+    }
+  }, [selectedType, formData.symbol, formData.maTimeframe])
+
   const handleSymbolInput = useCallback((value: string) => {
     setFormData((prev) => ({ ...prev, symbol: value.toUpperCase() }))
     if (searchTimeout.current) clearTimeout(searchTimeout.current)
@@ -118,7 +130,39 @@ export default function AlertsPage() {
     setFormData((prev) => ({ ...prev, symbol }))
     setShowDropdown(false)
     setSearchResults([])
+    if (selectedType === "ma") fetchMaPreview(symbol, formData.maTimeframe)
   }
+
+  const fetchMaPreview = useCallback((symbol: string, timeframe: string) => {
+    if (!symbol || symbol.length < 1) { setMaPreview(null); return }
+    if (maPreviewTimeout.current) clearTimeout(maPreviewTimeout.current)
+    maPreviewTimeout.current = setTimeout(async () => {
+      setMaPreviewLoading(true)
+      try {
+        const res = await fetch(`${API_BASE}/api/quote/${symbol.toUpperCase()}`)
+        if (!res.ok) { setMaPreview(null); return }
+        const data = await res.json()
+        const ind = data.indicators || {}
+        if (timeframe === "1W") {
+          // weekly: fetch from chart endpoint
+          const chartRes = await fetch(`${API_BASE}/api/chart/${symbol.toUpperCase()}?interval=1wk&period=5y`)
+          const chartData = await chartRes.json()
+          const closes = (chartData.candles || []).map((c: { close: number }) => c.close)
+          const wma = (period: number) => {
+            if (closes.length < period) return null
+            const slice = closes.slice(-period)
+            return Math.round(slice.reduce((a: number, b: number) => a + b, 0) / period * 100) / 100
+          }
+          setMaPreview({ 5: wma(5), 20: wma(20), 50: wma(50), 120: wma(120), 200: wma(200), price: data.price })
+        } else {
+          setMaPreview({
+            5: ind.ma_5 ?? null, 20: ind.ma_20 ?? null, 50: ind.ma_50 ?? null,
+            120: ind.ma_120 ?? null, 200: ind.ma_200 ?? null, price: data.price
+          })
+        }
+      } catch { setMaPreview(null) } finally { setMaPreviewLoading(false) }
+    }, 500)
+  }, [selectedType])
 
   const loadAlerts = async () => {
     if (!user?.user_id) return
@@ -497,6 +541,42 @@ export default function AlertsPage() {
                       </select>
                     </div>
                   </>
+                )}
+
+                {/* MA 실시간 프리뷰 */}
+                {selectedType === "ma" && formData.symbol && (
+                  <div className="md:col-span-2 p-4 bg-[#f5f4ed] border border-[#f0eee6] rounded-xl">
+                    <p className="text-xs font-medium text-[#87867f] uppercase tracking-wide mb-3">
+                      {formData.symbol} {formData.maTimeframe === "1W" ? "주봉" : "일봉"} 이동평균선
+                      {maPreviewLoading && <span className="ml-2 text-[#b0aea5]">로딩 중...</span>}
+                    </p>
+                    {maPreview ? (
+                      <>
+                        <div className="grid grid-cols-5 gap-2">
+                          {([5, 20, 50, 120, 200] as const).map((p) => {
+                            const val = maPreview[p] as number | null
+                            const price = maPreview.price as number
+                            const above = val !== null && price > val
+                            const selected = formData.maPeriod === String(p)
+                            return (
+                              <button key={p} type="button"
+                                onClick={() => setFormData(f => ({ ...f, maPeriod: String(p) }))}
+                                className={`flex flex-col items-center p-2.5 rounded-xl border transition-all ${selected ? "border-[#c96442] bg-[#c96442]/5 shadow-[0px_0px_0px_1px_#c96442]" : "border-[#f0eee6] hover:border-[#e8e6dc]"}`}>
+                                <span className="text-[10px] text-[#87867f] mb-1">MA{p}</span>
+                                <span className="text-xs font-medium text-[#141413]">{val ? `$${val}` : "—"}</span>
+                                {val !== null && <span className={`text-[10px] font-medium mt-0.5 ${above ? "text-[#2d6a4f]" : "text-[#b53333]"}`}>{above ? "↑" : "↓"}</span>}
+                              </button>
+                            )
+                          })}
+                        </div>
+                        {maPreview.price && (
+                          <p className="text-xs text-[#87867f] mt-2.5">현재가: <span className="font-medium text-[#141413]">${(maPreview.price as number).toFixed(2)}</span></p>
+                        )}
+                      </>
+                    ) : (
+                      <p className="text-xs text-[#b0aea5]">심볼을 입력하면 이평선 값이 표시됩니다</p>
+                    )}
+                  </div>
                 )}
 
                 {selectedType === "volume" && (
