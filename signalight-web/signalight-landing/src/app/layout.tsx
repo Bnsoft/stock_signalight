@@ -20,6 +20,11 @@ export const metadata: Metadata = {
   description:
     "Personal stock signal scanner for ETF traders. RSI, MA crossover, drawdown alerts — straight to your Telegram.",
   keywords: ["stock signals", "ETF scanner", "RSI alert", "trading bot", "QQQ", "TQQQ"],
+  icons: {
+    icon: "/icon.svg",
+    shortcut: "/icon.svg",
+    apple: "/icon.svg",
+  },
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,

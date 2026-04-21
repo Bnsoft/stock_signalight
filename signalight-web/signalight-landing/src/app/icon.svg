@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" fill="none">
+  <!-- Background -->
+  <rect width="32" height="32" rx="8" fill="#c96442"/>
+  <!-- Upward chart line -->
+  <polyline
+    points="4,22 10,16 16,18 22,10 28,6"
+    stroke="#faf9f5"
+    stroke-width="2.5"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+    fill="none"
+  />
+  <!-- Bell shape -->
+  <path
+    d="M16 26c1.1 0 2-.9 2-2h-4c0 1.1.9 2 2 2z"
+    fill="#faf9f5"
+  />
+  <path
+    d="M22 21v-5a6 6 0 0 0-5-5.91V9a1 1 0 0 0-2 0v1.09A6 6 0 0 0 10 16v5l-2 2v1h16v-1l-2-2z"
+    fill="#faf9f5"
+    fill-opacity="0.9"
+  />
+</svg>
