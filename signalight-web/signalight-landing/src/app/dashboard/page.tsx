@@ -1,11 +1,12 @@
 "use client"
 
 import Link from "next/link"
-import { Bell, Calculator, Download, User } from "lucide-react"
+import { Bell, Calculator, Download, User, FileBarChart } from "lucide-react"
 import { useAuth } from "@/context/AuthContext"
 
 const tools = [
   { href: "/dashboard/alerts", icon: Bell, label: "알람 관리", desc: "가격·이동평균선·거래량 알람 설정 및 텔레그램 알림" },
+  { href: "/dashboard/reports", icon: FileBarChart, label: "데일리 리포트", desc: "정기 주가 리포트 — 텔레그램·이메일 구독" },
   { href: "/dashboard/calculator", icon: Calculator, label: "계산기", desc: "수익률·손익분기·세후 수익 계산" },
   { href: "/dashboard/backtest-calculator", icon: Calculator, label: "백테스트 계산기", desc: "전략 과거 성과 검증 및 분석" },
   { href: "/dashboard/data-export", icon: Download, label: "데이터 내보내기", desc: "시그널·알람 CSV 내보내기" },
