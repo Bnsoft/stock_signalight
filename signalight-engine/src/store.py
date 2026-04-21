@@ -612,6 +612,19 @@ def init_db() -> None:
                 fired_at       DATETIME DEFAULT CURRENT_TIMESTAMP
             );
         """)
+
+    # Add schedule columns to existing alert tables (idempotent migrations)
+    with _connect() as conn:
+        for table in ("price_alerts", "indicator_alerts", "volume_alerts"):
+            cols = [r[1] for r in conn.execute(f"PRAGMA table_info({table})").fetchall()]
+            if "schedule_enabled" not in cols:
+                conn.execute(f"ALTER TABLE {table} ADD COLUMN schedule_enabled INTEGER DEFAULT 0")
+            if "schedule_time" not in cols:
+                conn.execute(f"ALTER TABLE {table} ADD COLUMN schedule_time TEXT")
+            if "schedule_days" not in cols:
+                conn.execute(f"ALTER TABLE {table} ADD COLUMN schedule_days TEXT DEFAULT 'daily'")
+        conn.commit()
+
     _seed_watchlist()
     logger.info("SQLite database initialised with analytics tables")
 

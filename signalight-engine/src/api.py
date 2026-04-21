@@ -93,9 +93,15 @@ async def login(req: LoginRequest):
 
 
 @app.post("/auth/guest")
-async def create_guest():
+async def create_guest(guest_id: Optional[str] = None):
     from . import auth
     try:
+        # If existing guest_id provided, reuse that user
+        if guest_id:
+            user = db_store.get_user(guest_id)
+            if user and user.get("auth_method") == "guest":
+                token = auth.create_access_token(guest_id)
+                return {"user_id": guest_id, "display_name": user["display_name"], "auth_method": "guest", "token": token}
         return auth.create_guest_user()
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -426,6 +432,92 @@ async def delete_alert(alert_id: int, alert_type: str):
     try:
         ok = alerts_advanced.delete_alert(alert_id, alert_type)
         return {"status": "ok" if ok else "failed"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+class AlertUpdateRequest(BaseModel):
+    symbol: Optional[str] = None
+    alert_type: Optional[str] = None
+    trigger_price: Optional[float] = None
+    indicator: Optional[str] = None
+    condition: Optional[str] = None
+    threshold: Optional[float] = None
+    timeframe: Optional[str] = None
+    multiplier: Optional[float] = None
+    notify_methods: Optional[List[str]] = None
+    schedule_enabled: Optional[bool] = None
+    schedule_time: Optional[str] = None   # "HH:MM"
+    schedule_days: Optional[str] = None   # "daily" | "weekdays" | "MON,WED,FRI"
+
+
+@app.put("/api/alerts/{alert_id}")
+async def update_alert(alert_id: int, alert_category: str, req: AlertUpdateRequest):
+    """Update an existing alert."""
+    table_map = {"PRICE": "price_alerts", "INDICATOR": "indicator_alerts", "VOLUME": "volume_alerts"}
+    table = table_map.get(alert_category.upper())
+    if not table:
+        raise HTTPException(status_code=400, detail="Invalid alert_category")
+    try:
+        updates = {k: v for k, v in req.dict(exclude_unset=True).items() if v is not None}
+        if "notify_methods" in updates:
+            updates["notify_methods"] = ",".join(updates["notify_methods"])
+        if "schedule_enabled" in updates:
+            updates["schedule_enabled"] = 1 if updates["schedule_enabled"] else 0
+        if not updates:
+            raise HTTPException(status_code=400, detail="No fields to update")
+        set_clause = ", ".join(f"{k} = ?" for k in updates)
+        with db_store._connect() as conn:
+            conn.execute(f"UPDATE {table} SET {set_clause} WHERE id = ?", [*updates.values(), alert_id])
+            conn.commit()
+        return {"status": "ok", "alert_id": alert_id}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/alerts/{alert_id}/run")
+async def run_alert_now(alert_id: int, alert_category: str):
+    """Manually trigger an alert check and send Telegram if condition is met."""
+    table_map = {"PRICE": "price_alerts", "INDICATOR": "indicator_alerts", "VOLUME": "volume_alerts"}
+    table = table_map.get(alert_category.upper())
+    if not table:
+        raise HTTPException(status_code=400, detail="Invalid alert_category")
+    try:
+        with db_store._connect() as conn:
+            row = conn.execute(f"SELECT * FROM {table} WHERE id = ?", (alert_id,)).fetchone()
+            cols = [d[0] for d in conn.execute(f"PRAGMA table_info({table})").fetchall()]
+        if not row:
+            raise HTTPException(status_code=404, detail="Alert not found")
+        alert = dict(zip(cols, row))
+        symbol = alert["symbol"]
+
+        from .market import fetch_daily_data
+        from .pulse import get_all_indicators
+        from .alerts_checker import check_user_alerts
+
+        df = await asyncio.get_event_loop().run_in_executor(None, fetch_daily_data, symbol, "1y")
+        if df.empty:
+            return {"status": "no_data", "symbol": symbol}
+
+        indicators = get_all_indicators(df)
+        current_price = indicators.get("current_price", 0)
+        current_volume = float(df["Volume"].iloc[-1]) if "Volume" in df.columns else 0
+        avg_volume = float(df["Volume"].tail(20).mean()) if "Volume" in df.columns else 0
+
+        triggered = check_user_alerts(symbol, df, current_price, current_volume, avg_volume)
+        fired = [a for a in triggered if str(a.get("alert_id", "")) == str(alert_id) or True]
+
+        if triggered:
+            from .alert import send_message
+            for ua in triggered:
+                await send_message(f"🔔 <b>수동 실행 알람</b>\n{ua['message']}")
+            return {"status": "triggered", "count": len(triggered), "symbol": symbol}
+
+        return {"status": "not_triggered", "symbol": symbol, "price": current_price}
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

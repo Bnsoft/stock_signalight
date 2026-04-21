@@ -11,6 +11,9 @@ import {
   Volume2,
   BarChart3,
   Bell,
+  Pencil,
+  Play,
+  Clock,
 } from "lucide-react"
 import { useToast } from "@/hooks/useToast"
 import { useCache } from "@/hooks/useCache"
@@ -29,6 +32,9 @@ interface Alert {
   createdDate: string
   lastTriggered?: string
   notificationChannels: string[]
+  scheduleEnabled?: boolean
+  scheduleTime?: string
+  scheduleDays?: string
 }
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"
@@ -54,12 +60,15 @@ export default function AlertsPage() {
   const [alerts, setAlerts] = useState<Alert[]>([])
   const [loading, setLoading] = useState(false)
   const [showAddForm, setShowAddForm] = useState(false)
+  const [editingAlert, setEditingAlert] = useState<Alert | null>(null)
+  const [runningId, setRunningId] = useState<string | null>(null)
   const [selectedType, setSelectedType] = useState("price")
   const [searchResults, setSearchResults] = useState<{ symbol: string; name: string; type: string }[]>([])
   const [showDropdown, setShowDropdown] = useState(false)
   const searchTimeout = useRef<ReturnType<typeof setTimeout> | null>(null)
   const dropdownRef = useRef<HTMLDivElement>(null)
-  const [formData, setFormData] = useState({
+
+  const defaultForm = {
     symbol: "",
     condition: "greater",
     threshold: "",
@@ -68,7 +77,11 @@ export default function AlertsPage() {
     maTimeframe: "1D",
     volumeMultiplier: "2",
     notificationChannels: [] as string[],
-  })
+    scheduleEnabled: false,
+    scheduleTime: "07:00",
+    scheduleDays: "daily",
+  }
+  const [formData, setFormData] = useState(defaultForm)
 
   useEffect(() => {
     loadAlerts()
@@ -123,18 +136,21 @@ export default function AlertsPage() {
           name: `${a.symbol} 가격알람`, condition: a.type as string,
           threshold: a.trigger as number, enabled: a.active as boolean,
           createdDate: "", notificationChannels: (a.notify_methods as string[]) || [],
+          scheduleEnabled: a.schedule_enabled as boolean, scheduleTime: a.schedule_time as string, scheduleDays: a.schedule_days as string,
         })),
         ...(data.indicator_alerts || []).map((a: Record<string, unknown>) => ({
           id: `INDICATOR:${a.id}`, type: "ma", symbol: a.symbol as string,
           name: `${a.symbol} MA${a.threshold}(${a.timeframe})`, condition: a.condition as string,
           threshold: a.threshold as number, enabled: a.active as boolean,
           createdDate: "", notificationChannels: (a.notify_methods as string[]) || [],
+          scheduleEnabled: a.schedule_enabled as boolean, scheduleTime: a.schedule_time as string, scheduleDays: a.schedule_days as string,
         })),
         ...(data.volume_alerts || []).map((a: Record<string, unknown>) => ({
           id: `VOLUME:${a.id}`, type: "volume", symbol: a.symbol as string,
           name: `${a.symbol} 거래량알람`, condition: a.type as string,
           threshold: a.threshold as number, enabled: a.active as boolean,
           createdDate: "", notificationChannels: (a.notify_methods as string[]) || [],
+          scheduleEnabled: a.schedule_enabled as boolean, scheduleTime: a.schedule_time as string, scheduleDays: a.schedule_days as string,
         })),
       ]
 
@@ -213,16 +229,7 @@ export default function AlertsPage() {
 
       cache.remove(`/api/alerts`)
       success("알람이 추가되었습니다")
-      setFormData({
-        symbol: "",
-        condition: "greater",
-        threshold: "",
-        maPeriod: "20",
-        maCondition: "CROSS_ABOVE",
-        maTimeframe: "1D",
-        volumeMultiplier: "2",
-        notificationChannels: [],
-      })
+      setFormData(defaultForm)
       setShowAddForm(false)
 
       await loadAlerts()
@@ -254,6 +261,78 @@ export default function AlertsPage() {
       showError("알람 업데이트에 실패했습니다")
       console.error(err)
     }
+  }
+
+  const handleRunAlert = async (alertId: string) => {
+    const [alertType, rawId] = alertId.split(":")
+    setRunningId(alertId)
+    try {
+      const res = await fetch(`${API_BASE}/api/alerts/${rawId}/run?alert_category=${alertType}`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      const data = await res.json()
+      if (data.status === "triggered") success(`알람 발동! ${data.count}개 조건 충족`)
+      else if (data.status === "not_triggered") showError(`조건 미충족 (현재가: $${data.price?.toFixed(2)})`)
+      else showError("데이터 없음")
+    } catch { showError("실행 실패") } finally { setRunningId(null) }
+  }
+
+  const startEdit = (alert: Alert) => {
+    setEditingAlert(alert)
+    setSelectedType(alert.type)
+    setFormData({
+      symbol: alert.symbol,
+      condition: alert.condition.includes("ABOVE") ? "greater" : alert.condition.includes("BELOW") ? "less" : "greater",
+      threshold: String(alert.threshold),
+      maPeriod: String(alert.threshold),
+      maCondition: alert.condition,
+      maTimeframe: "1D",
+      volumeMultiplier: String(alert.threshold) || "2",
+      notificationChannels: alert.notificationChannels.map(c => c.toLowerCase()),
+      scheduleEnabled: alert.scheduleEnabled || false,
+      scheduleTime: alert.scheduleTime || "07:00",
+      scheduleDays: alert.scheduleDays || "daily",
+    })
+    setShowAddForm(true)
+  }
+
+  const handleUpdateAlert = async () => {
+    if (!editingAlert) return
+    const [alertType, rawId] = editingAlert.id.split(":")
+    const notifyMethods = formData.notificationChannels.length > 0
+      ? formData.notificationChannels.map(c => c.toUpperCase())
+      : ["PUSH"]
+    const body: Record<string, unknown> = {
+      notify_methods: notifyMethods,
+      schedule_enabled: formData.scheduleEnabled,
+      schedule_time: formData.scheduleEnabled ? formData.scheduleTime : null,
+      schedule_days: formData.scheduleDays,
+    }
+    if (selectedType === "price") {
+      body.trigger_price = parseFloat(formData.threshold)
+      body.alert_type = formData.condition === "greater" ? "PRICE_ABOVE" : "PRICE_BELOW"
+    } else if (selectedType === "ma") {
+      body.threshold = parseFloat(formData.maPeriod)
+      body.condition = formData.maCondition
+      body.timeframe = formData.maTimeframe
+    } else {
+      body.multiplier = parseFloat(formData.volumeMultiplier)
+    }
+    try {
+      const res = await fetch(`${API_BASE}/api/alerts/${rawId}?alert_category=${alertType}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify(body),
+      })
+      if (!res.ok) throw new Error("수정 실패")
+      cache.remove(`/api/alerts`)
+      success("알람이 수정되었습니다")
+      setEditingAlert(null)
+      setShowAddForm(false)
+      setFormData(defaultForm)
+      await loadAlerts()
+    } catch { showError("수정에 실패했습니다") }
   }
 
   const handleDeleteAlert = async (alertId: string) => {
@@ -295,7 +374,7 @@ export default function AlertsPage() {
               <p className="text-[#87867f] text-sm">가격·이동평균선·거래량 알람을 설정하세요</p>
             </div>
             <button
-              onClick={() => setShowAddForm(!showAddForm)}
+              onClick={() => { setEditingAlert(null); setFormData(defaultForm); setShowAddForm(!showAddForm) }}
               className="flex items-center gap-2 px-5 py-2.5 bg-[#c96442] hover:bg-[#b8573b] text-[#faf9f5] rounded-xl text-sm font-medium transition-colors shadow-[0px_0px_0px_1px_#c96442]"
             >
               <Plus size={16} /> 새 알람
@@ -306,7 +385,9 @@ export default function AlertsPage() {
         {showAddForm && (
           <AnimateIn from="bottom" delay={60}>
             <div className="bg-[#faf9f5] border border-[#f0eee6] rounded-2xl p-6 mb-5 shadow-[rgba(0,0,0,0.05)_0px_4px_24px]">
-              <h2 className="text-base font-medium text-[#141413] mb-5" style={{ fontFamily: "Georgia, serif" }}>새 알람 추가</h2>
+              <h2 className="text-base font-medium text-[#141413] mb-5" style={{ fontFamily: "Georgia, serif" }}>
+                {editingAlert ? "알람 수정" : "새 알람 추가"}
+              </h2>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-5">
                 <div>
@@ -411,12 +492,45 @@ export default function AlertsPage() {
                 </div>
               </div>
 
+              {/* Schedule */}
+              <div className="mb-5 p-4 bg-[#f5f4ed] rounded-xl border border-[#f0eee6]">
+                <label className="flex items-center gap-2 cursor-pointer mb-3">
+                  <input type="checkbox" checked={formData.scheduleEnabled}
+                    onChange={(e) => setFormData({ ...formData, scheduleEnabled: e.target.checked })}
+                    className="w-4 h-4 accent-[#c96442] rounded" />
+                  <span className="text-sm font-medium text-[#141413] flex items-center gap-1.5">
+                    <Clock size={14} className="text-[#87867f]" /> 예약 실행
+                  </span>
+                </label>
+                {formData.scheduleEnabled && (
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className={labelCls}>실행 시간</label>
+                      <input type="time" value={formData.scheduleTime}
+                        onChange={(e) => setFormData({ ...formData, scheduleTime: e.target.value })}
+                        className={selectCls} />
+                    </div>
+                    <div>
+                      <label className={labelCls}>반복</label>
+                      <select value={formData.scheduleDays}
+                        onChange={(e) => setFormData({ ...formData, scheduleDays: e.target.value })}
+                        className={selectCls}>
+                        <option value="daily">매일</option>
+                        <option value="weekdays">평일만 (월-금)</option>
+                        <option value="MON,WED,FRI">월·수·금</option>
+                        <option value="MON">매주 월요일</option>
+                      </select>
+                    </div>
+                  </div>
+                )}
+              </div>
+
               <div className="flex gap-2">
-                <button onClick={handleAddAlert}
+                <button onClick={editingAlert ? handleUpdateAlert : handleAddAlert}
                   className="px-5 py-2.5 bg-[#c96442] hover:bg-[#b8573b] text-[#faf9f5] rounded-xl text-sm font-medium transition-colors">
-                  추가
+                  {editingAlert ? "수정 저장" : "추가"}
                 </button>
-                <button onClick={() => setShowAddForm(false)}
+                <button onClick={() => { setShowAddForm(false); setEditingAlert(null); setFormData(defaultForm) }}
                   className="px-5 py-2.5 bg-[#e8e6dc] hover:bg-[#d1cfc5] text-[#4d4c48] rounded-xl text-sm font-medium transition-colors">
                   취소
                 </button>
@@ -470,9 +584,27 @@ export default function AlertsPage() {
                               {alert.notificationChannels.length > 0 ? alert.notificationChannels.join(", ").toUpperCase() : "PUSH"}
                             </span>
                           </p>
+                          {alert.scheduleEnabled && alert.scheduleTime && (
+                            <p className="text-xs text-[#5e5d59] mt-1 flex items-center gap-1">
+                              <Clock size={11} className="text-[#87867f]" />
+                              <span className="font-medium">{alert.scheduleTime}</span>
+                              <span className="text-[#87867f]">({alert.scheduleDays === "daily" ? "매일" : alert.scheduleDays === "weekdays" ? "평일" : alert.scheduleDays})</span>
+                            </p>
+                          )}
                         </div>
                       </div>
                       <div className="flex gap-1 shrink-0">
+                        <button onClick={() => handleRunAlert(alert.id)}
+                          disabled={runningId === alert.id}
+                          className="p-2 hover:bg-[#2d6a4f]/10 rounded-lg transition-colors text-[#2d6a4f] disabled:opacity-40"
+                          title="지금 실행">
+                          <Play size={15} />
+                        </button>
+                        <button onClick={() => startEdit(alert)}
+                          className="p-2 hover:bg-[#5e5d59]/10 rounded-lg transition-colors text-[#5e5d59]"
+                          title="편집">
+                          <Pencil size={15} />
+                        </button>
                         <button onClick={() => handleToggleAlert(alert.id)}
                           className={`p-2 rounded-lg transition-colors ${alert.enabled ? "hover:bg-[#92600a]/10 text-[#92600a]" : "hover:bg-[#2d6a4f]/10 text-[#2d6a4f]"}`}
                           title={alert.enabled ? "비활성화" : "활성화"}>

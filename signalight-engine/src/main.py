@@ -97,6 +97,69 @@ async def _background_scanner():
         await asyncio.sleep(interval)
 
 
+async def _schedule_checker():
+    """Check scheduled alerts every minute and fire when time matches."""
+    import zoneinfo
+    from datetime import datetime
+
+    await asyncio.sleep(30)
+    logger.info("Schedule checker started")
+    while True:
+        try:
+            now = datetime.now(zoneinfo.ZoneInfo("America/New_York"))
+            current_time = now.strftime("%H:%M")
+            weekday = now.strftime("%a").upper()[:3]  # MON, TUE, ...
+
+            from . import store
+            with store._connect() as conn:
+                scheduled = []
+                for table, category in [("price_alerts", "PRICE"), ("indicator_alerts", "INDICATOR"), ("volume_alerts", "VOLUME")]:
+                    rows = conn.execute(
+                        f"SELECT id, symbol, notify_methods, schedule_days FROM {table} "
+                        f"WHERE schedule_enabled = 1 AND schedule_time = ? AND is_active = 1",
+                        (current_time,)
+                    ).fetchall()
+                    for row in rows:
+                        scheduled.append({"id": row[0], "symbol": row[1], "notify_methods": row[2], "schedule_days": row[3], "category": category, "table": table})
+
+            for alert in scheduled:
+                days = (alert["schedule_days"] or "daily").lower()
+                if days == "daily" or days == "weekdays" and weekday in ("MON", "TUE", "WED", "THU", "FRI") or weekday in days.upper():
+                    try:
+                        from .market import fetch_daily_data
+                        from .pulse import get_all_indicators
+                        from .alerts_checker import check_user_alerts
+
+                        df = await asyncio.get_event_loop().run_in_executor(None, fetch_daily_data, alert["symbol"], "1y")
+                        if df.empty:
+                            continue
+                        indicators = get_all_indicators(df)
+                        price = indicators.get("current_price", 0)
+                        vol = float(df["Volume"].iloc[-1]) if "Volume" in df.columns else 0
+                        avg_vol = float(df["Volume"].tail(20).mean()) if "Volume" in df.columns else 0
+                        triggered = check_user_alerts(alert["symbol"], df, price, vol, avg_vol)
+
+                        from .alert import send_message
+                        if triggered:
+                            for ua in triggered:
+                                if "TELEGRAM" in [m.upper() for m in (ua.get("notify_methods") or [])]:
+                                    await send_message(f"⏰ <b>예약 알람</b>\n{ua['message']}")
+                        else:
+                            # Always send scheduled report even if condition not met
+                            methods = (alert["notify_methods"] or "").upper()
+                            if "TELEGRAM" in methods:
+                                await send_message(f"⏰ <b>예약 리포트</b> — {alert['symbol']}\n현재가: ${price:.2f}\n조건 미충족")
+                        logger.info(f"Scheduled alert fired: {alert['symbol']} [{alert['category']}]")
+                    except Exception as e:
+                        logger.warning(f"Scheduled alert error: {e}")
+
+        except asyncio.CancelledError:
+            break
+        except Exception as e:
+            logger.error(f"Schedule checker error: {e}")
+        await asyncio.sleep(60)  # Check every minute
+
+
 async def _start_telegram_bot():
     """Run the Telegram bot inside the FastAPI process."""
     try:
@@ -124,13 +187,15 @@ async def lifespan(app: FastAPI):
     logger.info("DB initialized")
 
     scanner_task = asyncio.create_task(_background_scanner())
+    schedule_task = asyncio.create_task(_schedule_checker())
     bot_app = await _start_telegram_bot()
 
     yield
 
     logger.info("Shutting down...")
     scanner_task.cancel()
-    await asyncio.gather(scanner_task, return_exceptions=True)
+    schedule_task.cancel()
+    await asyncio.gather(scanner_task, schedule_task, return_exceptions=True)
 
     if bot_app:
         await bot_app.updater.stop()

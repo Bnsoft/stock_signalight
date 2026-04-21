@@ -117,7 +117,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const loginGuest = async () => {
     try {
-      const res = await fetch(`${API_BASE}/auth/guest`, {
+      // Reuse existing guest_id if available so alerts persist across sessions
+      const existingGuestId = localStorage.getItem("guest_id")
+      const url = existingGuestId
+        ? `${API_BASE}/auth/guest?guest_id=${existingGuestId}`
+        : `${API_BASE}/auth/guest`
+
+      const res = await fetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
       })
@@ -138,6 +144,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       localStorage.setItem("auth_token", data.token)
       localStorage.setItem("auth_user", JSON.stringify(userData))
+      localStorage.setItem("guest_id", data.user_id)
 
       router.push("/dashboard")
     } catch (error) {
