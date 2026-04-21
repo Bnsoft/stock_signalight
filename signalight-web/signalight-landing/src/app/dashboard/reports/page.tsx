@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from "react"
 import { useAuth } from "@/context/AuthContext"
 import { AnimateIn } from "@/components/layout/AnimateIn"
-import { Plus, Trash2, Play, ToggleLeft, Clock, FileBarChart } from "lucide-react"
+import { Plus, Trash2, Play, ToggleLeft, Clock, FileBarChart, Pencil } from "lucide-react"
 import { ToastContainer } from "@/components/ToastContainer"
 import { useToast } from "@/hooks/useToast"
 import { MAChart } from "@/components/dashboard/MAChart"
@@ -65,6 +65,7 @@ export default function ReportsPage() {
     days: "weekdays", channels: [] as string[],
   }
   const [form, setForm] = useState(defaultForm)
+  const [editingSub, setEditingSub] = useState<Subscription | null>(null)
 
   // 마지막으로 입력된 토큰(공백/쉼표 이후 현재 입력중인 심볼)을 검색
   const handleSymbolInput = useCallback((raw: string) => {
@@ -128,6 +129,39 @@ export default function ReportsPage() {
     } catch (e: unknown) { showError(e instanceof Error ? e.message : "오류 발생") }
   }
 
+  const startEdit = (sub: Subscription) => {
+    setEditingSub(sub)
+    setForm({
+      name: sub.name,
+      symbols: sub.symbols.join(" "),
+      report_time: sub.report_time,
+      days: sub.days,
+      channels: sub.channels,
+    })
+    setChartSymbol(sub.symbols[0] || null)
+    setShowForm(true)
+  }
+
+  const handleUpdate = async () => {
+    if (!editingSub) return
+    const symbols = form.symbols.split(/[\s,]+/).map(s => s.trim().toUpperCase()).filter(Boolean)
+    if (!form.name || symbols.length === 0) { showError("이름과 심볼을 입력하세요"); return }
+    if (form.channels.length === 0) { showError("알림 채널을 선택하세요"); return }
+    try {
+      const res = await fetch(`${API_BASE}/api/reports/subscriptions/${editingSub.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ name: form.name, symbols, report_time: form.report_time, days: form.days, channels: form.channels }),
+      })
+      if (!res.ok) throw new Error("수정 실패")
+      success("리포트가 수정되었습니다")
+      setEditingSub(null)
+      setShowForm(false)
+      setForm(defaultForm)
+      await load()
+    } catch (e: unknown) { showError(e instanceof Error ? e.message : "오류 발생") }
+  }
+
   const handleDelete = async (id: number) => {
     if (!confirm("이 리포트 구독을 삭제하시겠습니까?")) return
     try {
@@ -175,7 +209,7 @@ export default function ReportsPage() {
               <p className="text-[#87867f] text-sm">정기적으로 주가 리포트를 텔레그램 또는 이메일로 받습니다</p>
             </div>
             {activeTab === "subs" && (
-              <button onClick={() => setShowForm(!showForm)}
+              <button onClick={() => { setEditingSub(null); setForm(defaultForm); setShowForm(v => !v) }}
                 className="flex items-center gap-2 px-5 py-2.5 bg-[#c96442] hover:bg-[#b8573b] text-[#faf9f5] rounded-xl text-sm font-medium transition-colors">
                 <Plus size={16} /> 새 구독
               </button>
@@ -197,7 +231,9 @@ export default function ReportsPage() {
         {activeTab === "subs" && showForm && (
           <AnimateIn from="bottom" delay={60}>
             <div className="bg-[#faf9f5] border border-[#f0eee6] rounded-2xl p-6 mb-5 shadow-[rgba(0,0,0,0.05)_0px_4px_24px]">
-              <h2 className="text-base font-medium text-[#141413] mb-5" style={{ fontFamily: "Georgia, serif" }}>새 리포트 구독</h2>
+              <h2 className="text-base font-medium text-[#141413] mb-5" style={{ fontFamily: "Georgia, serif" }}>
+                {editingSub ? "리포트 수정" : "새 리포트 구독"}
+              </h2>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                 <div>
@@ -292,11 +328,11 @@ export default function ReportsPage() {
               </div>
 
               <div className="flex gap-2">
-                <button onClick={handleCreate}
+                <button onClick={editingSub ? handleUpdate : handleCreate}
                   className="px-5 py-2.5 bg-[#c96442] hover:bg-[#b8573b] text-[#faf9f5] rounded-xl text-sm font-medium transition-colors">
-                  추가
+                  {editingSub ? "수정 저장" : "추가"}
                 </button>
-                <button onClick={() => { setShowForm(false); setForm(defaultForm) }}
+                <button onClick={() => { setShowForm(false); setEditingSub(null); setForm(defaultForm) }}
                   className="px-5 py-2.5 bg-[#e8e6dc] hover:bg-[#d1cfc5] text-[#4d4c48] rounded-xl text-sm font-medium transition-colors">
                   취소
                 </button>
@@ -352,6 +388,10 @@ export default function ReportsPage() {
                         <button onClick={() => handleRunNow(sub)} disabled={runningId === sub.id}
                           title="지금 발송" className="p-2 hover:bg-[#2d6a4f]/10 rounded-lg text-[#2d6a4f] disabled:opacity-40 transition-colors">
                           <Play size={15} />
+                        </button>
+                        <button onClick={() => startEdit(sub)}
+                          title="편집" className="p-2 hover:bg-[#5e5d59]/10 rounded-lg text-[#5e5d59] transition-colors">
+                          <Pencil size={15} />
                         </button>
                         <button onClick={() => handleToggle(sub)}
                           title={sub.is_active ? "비활성화" : "활성화"}
