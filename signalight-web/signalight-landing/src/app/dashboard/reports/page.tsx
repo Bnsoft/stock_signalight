@@ -6,6 +6,7 @@ import { AnimateIn } from "@/components/layout/AnimateIn"
 import { Plus, Trash2, Play, ToggleLeft, Clock, FileBarChart } from "lucide-react"
 import { ToastContainer } from "@/components/ToastContainer"
 import { useToast } from "@/hooks/useToast"
+import { MAChart } from "@/components/dashboard/MAChart"
 
 interface Subscription {
   id: number
@@ -56,6 +57,8 @@ export default function ReportsPage() {
   const [showDropdown, setShowDropdown] = useState(false)
   const searchTimeout = useRef<ReturnType<typeof setTimeout> | null>(null)
   const dropdownRef = useRef<HTMLDivElement>(null)
+  const [chartSymbol, setChartSymbol] = useState<string | null>(null)
+  const [chartTimeframe, setChartTimeframe] = useState<"1D" | "1W">("1D")
 
   const defaultForm = {
     name: "", symbols: "", report_time: "08:00",
@@ -81,12 +84,12 @@ export default function ReportsPage() {
   }, [])
 
   const selectSymbol = (sym: string) => {
-    // 현재 입력된 마지막 토큰을 선택된 심볼로 교체
     const parts = form.symbols.split(/[\s,]+/).filter(Boolean)
     parts[parts.length > 0 ? parts.length - 1 : 0] = sym
     setForm(f => ({ ...f, symbols: parts.join(" ") + " " }))
     setShowDropdown(false)
     setSearchResults([])
+    setChartSymbol(sym)
   }
 
   const load = async () => {
@@ -228,15 +231,36 @@ export default function ReportsPage() {
                       ))}
                     </div>
                   )}
-                  {/* 추가된 심볼 태그 미리보기 */}
+                  {/* 심볼 태그 — 클릭하면 차트 전환 */}
                   {form.symbols.trim() && (
                     <div className="flex flex-wrap gap-1.5 mt-2">
                       {form.symbols.split(/[\s,]+/).filter(Boolean).map(s => (
-                        <span key={s} className="px-2 py-0.5 bg-[#e8e6dc] rounded-lg text-xs font-mono font-medium text-[#4d4c48]">{s}</span>
+                        <button key={s} type="button" onClick={() => setChartSymbol(s)}
+                          className={`px-2 py-0.5 rounded-lg text-xs font-mono font-medium transition-colors ${chartSymbol === s ? "bg-[#c96442] text-[#faf9f5]" : "bg-[#e8e6dc] text-[#4d4c48] hover:bg-[#d1cfc5]"}`}>
+                          {s}
+                        </button>
                       ))}
                     </div>
                   )}
                 </div>
+
+                {/* MA 차트 — col-span-2 */}
+                {chartSymbol && (
+                  <div className="md:col-span-2">
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className="text-xs font-medium text-[#87867f] uppercase tracking-wide">{chartSymbol} 이동평균선 차트</span>
+                      <div className="flex gap-1 ml-auto">
+                        {(["1D", "1W"] as const).map(tf => (
+                          <button key={tf} type="button" onClick={() => setChartTimeframe(tf)}
+                            className={`px-3 py-1 rounded-lg text-xs font-medium transition-colors ${chartTimeframe === tf ? "bg-[#141413] text-[#faf9f5]" : "bg-[#e8e6dc] text-[#5e5d59]"}`}>
+                            {tf === "1D" ? "일봉" : "주봉"}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <MAChart symbol={chartSymbol} timeframe={chartTimeframe} height={360} />
+                  </div>
+                )}
                 <div>
                   <label className={labelCls}>발송 시간</label>
                   <input type="time" value={form.report_time}
