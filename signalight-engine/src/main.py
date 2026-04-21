@@ -250,10 +250,12 @@ async def _schedule_checker():
 
 
 async def _send_report(sub: dict) -> tuple[str | None, str | None]:
-    """Build and send a report for a subscription. Returns (content, error)."""
+    """Build and send a report matching /price output. Returns (content, error)."""
     from .market import fetch_daily_data
     from .pulse import get_all_indicators, calculate_ma
     from .alert import send_message
+    from ta.momentum import RSIIndicator
+    import pandas as pd
 
     symbols = sub["symbols"].split(",") if isinstance(sub["symbols"], str) else sub["symbols"]
     channels = sub["channels"].split(",") if isinstance(sub["channels"], str) else sub["channels"]
@@ -262,41 +264,76 @@ async def _send_report(sub: dict) -> tuple[str | None, str | None]:
     lines = [f"📊 <b>{name}</b>\n{'─' * 22}"]
 
     try:
-        for sym in symbols:
-            sym = sym.strip().upper()
-            df = await asyncio.get_event_loop().run_in_executor(None, fetch_daily_data, sym, "1y")
-            if df.empty:
+        for sym in [s.strip().upper() for s in symbols if s.strip()]:
+            df_daily, df_5y = await asyncio.gather(
+                asyncio.get_event_loop().run_in_executor(None, fetch_daily_data, sym, "1y"),
+                asyncio.get_event_loop().run_in_executor(None, fetch_daily_data, sym, "5y"),
+            )
+            if df_daily.empty:
                 lines.append(f"\n<b>{sym}</b>: 데이터 없음")
                 continue
 
-            ind = get_all_indicators(df)
+            ind = get_all_indicators(df_daily)
             price = ind.get("current_price", 0)
-            mas = {p: calculate_ma(df, p) for p in (5, 20, 50, 120, 200)}
-            rsi_key = next((k for k in ind if k.startswith("rsi_")), None)
-            rsi = ind.get(rsi_key) if rsi_key else None
+            d_mas = {p: calculate_ma(df_daily, p) for p in (5, 20, 50, 120, 200)}
+
+            # Weekly MAs
+            col = "close" if "close" in df_5y.columns else "Close"
+            wk_close = df_5y[col].resample("W").last().dropna() if not df_5y.empty and col in df_5y.columns else pd.Series(dtype=float)
+            def _wma(p):
+                if len(wk_close) < p: return None
+                v = wk_close.rolling(p).mean().iloc[-1]
+                return round(float(v), 2) if pd.notna(v) else None
+            w_mas = {p: _wma(p) for p in (5, 20, 50, 120, 200)}
+
+            # Daily RSI
+            d_rsi = None
+            if len(df_daily) >= 15 and "close" in df_daily.columns:
+                v = RSIIndicator(close=df_daily["close"], window=14).rsi().iloc[-1]
+                d_rsi = round(float(v), 1) if pd.notna(v) else None
+
+            # Weekly RSI
+            w_rsi = None
+            if len(wk_close) >= 15:
+                v = RSIIndicator(close=wk_close, window=14).rsi().iloc[-1]
+                w_rsi = round(float(v), 1) if pd.notna(v) else None
+
             dd = ind.get("drawdown_pct")
-            vol = int(df["Volume"].iloc[-1]) if "Volume" in df.columns else 0
-            avg_vol = int(df["Volume"].tail(252).mean()) if "Volume" in df.columns else 0
+            ath = ind.get("ath")
+            vol = int(df_daily["Volume"].iloc[-1]) if "Volume" in df_daily.columns else 0
+            avg_vol = int(df_daily["Volume"].tail(252).mean()) if "Volume" in df_daily.columns else 0
             vol_pct = round((vol - avg_vol) / avg_vol * 100, 1) if avg_vol else 0
+            vol_sign = "+" if vol_pct >= 0 else ""
 
             def _f(v): return f"${v:.2f}" if v else "—"
-            def _a(p, ma): return "↑" if p and ma and p > ma else "↓" if ma else ""
+            def _a(p, ma): return "↑" if p and ma and p > ma else "↓" if ma else "—"
 
             lines.append(
-                f"\n<b>{sym}</b>  ${price:.2f}\n"
-                f"  MA5:{_f(mas[5])}{_a(price,mas[5])} MA20:{_f(mas[20])}{_a(price,mas[20])} "
-                f"MA50:{_f(mas[50])}{_a(price,mas[50])}\n"
-                f"  MA120:{_f(mas[120])}{_a(price,mas[120])} MA200:{_f(mas[200])}{_a(price,mas[200])}\n"
-                f"  RSI:{f'{rsi:.1f}' if rsi else '—'}  "
-                f"DD:{f'{dd:.1f}%' if dd is not None else '—'}  "
-                f"거래량:{vol_pct:+.1f}%"
+                f"\n📈 <b>{sym}</b>  ${price:.2f}\n"
+                f"{'─' * 20}\n"
+                f"<b>📊 일봉 이동평균선</b>\n"
+                f"  MA5:   {_f(d_mas[5])} {_a(price, d_mas[5])}\n"
+                f"  MA20:  {_f(d_mas[20])} {_a(price, d_mas[20])}\n"
+                f"  MA50:  {_f(d_mas[50])} {_a(price, d_mas[50])}\n"
+                f"  MA120: {_f(d_mas[120])} {_a(price, d_mas[120])}\n"
+                f"  MA200: {_f(d_mas[200])} {_a(price, d_mas[200])}\n"
+                f"  RSI:   {f'{d_rsi:.1f}' if d_rsi else '—'}\n"
+                f"<b>📅 주봉 이동평균선</b>\n"
+                f"  MA5:   {_f(w_mas[5])} {_a(price, w_mas[5])}\n"
+                f"  MA20:  {_f(w_mas[20])} {_a(price, w_mas[20])}\n"
+                f"  MA50:  {_f(w_mas[50])} {_a(price, w_mas[50])}\n"
+                f"  MA120: {_f(w_mas[120])} {_a(price, w_mas[120])}\n"
+                f"  MA200: {_f(w_mas[200])} {_a(price, w_mas[200])}\n"
+                f"  RSI:   {f'{w_rsi:.1f}' if w_rsi else '—'}\n"
+                f"<b>📊 거래량</b>\n"
+                f"  현재: {vol:,}  ({vol_sign}{vol_pct}% vs 1y평균)\n"
+                f"<b>Drawdown:</b> {f'{dd:.1f}%' if dd is not None else '—'}"
+                f"{f' (ATH ${ath:.2f})' if ath else ''}"
             )
 
         content = "\n".join(lines)
-
         if "TELEGRAM" in [c.upper() for c in channels]:
             await send_message(content)
-
         return content, None
 
     except Exception as e:
