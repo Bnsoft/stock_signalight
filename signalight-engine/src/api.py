@@ -352,27 +352,48 @@ async def get_quote(symbol: str):
 
 # ─── Alerts ──────────────────────────────────────────────
 
-class PriceAlertRequest(BaseModel):
+class _ScheduleMixin(BaseModel):
+    schedule_enabled: bool = False
+    schedule_type: str = "once"          # "once" | "interval"
+    schedule_time: Optional[str] = None  # "HH:MM" for once
+    schedule_days: str = "daily"         # "daily" | "weekdays" | "MON,WED,FRI"
+    schedule_start: Optional[str] = None # "HH:MM" for interval
+    schedule_end: Optional[str] = None   # "HH:MM" for interval
+    schedule_interval: Optional[int] = 5 # minutes: 5/10/30/60
+
+class PriceAlertRequest(_ScheduleMixin):
     symbol: str
-    alert_type: str  # PRICE_ABOVE, PRICE_BELOW
+    alert_type: str
     trigger_price: float
     notify_methods: List[str] = ["PUSH"]
     repeat_alert: bool = True
 
-class IndicatorAlertRequest(BaseModel):
+class IndicatorAlertRequest(_ScheduleMixin):
     symbol: str
-    indicator: str  # MA
-    condition: str  # ABOVE, BELOW, CROSS_ABOVE, CROSS_BELOW
+    indicator: str
+    condition: str
     threshold: float
     timeframe: str = "1D"
     notify_methods: List[str] = ["PUSH"]
 
-class VolumeAlertRequest(BaseModel):
+class VolumeAlertRequest(_ScheduleMixin):
     symbol: str
     alert_type: str = "UNUSUAL_VOLUME"
     volume_threshold: float = 0
     multiplier: float = 2.0
     notify_methods: List[str] = ["PUSH"]
+
+
+def _sched(req: _ScheduleMixin) -> dict:
+    return {
+        "schedule_enabled": req.schedule_enabled,
+        "schedule_type": req.schedule_type,
+        "schedule_time": req.schedule_time,
+        "schedule_days": req.schedule_days,
+        "schedule_start": req.schedule_start,
+        "schedule_end": req.schedule_end,
+        "schedule_interval": req.schedule_interval,
+    }
 
 
 @app.post("/api/alerts/price")
@@ -381,7 +402,8 @@ async def create_price_alert(user_id: str, req: PriceAlertRequest):
     try:
         return alerts_advanced.create_price_alert(
             user_id=user_id, symbol=req.symbol, alert_type=req.alert_type,
-            trigger_price=req.trigger_price, notify_methods=req.notify_methods, repeat_alert=req.repeat_alert,
+            trigger_price=req.trigger_price, notify_methods=req.notify_methods,
+            repeat_alert=req.repeat_alert, **_sched(req),
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -394,7 +416,7 @@ async def create_indicator_alert(user_id: str, req: IndicatorAlertRequest):
         return alerts_advanced.create_indicator_alert(
             user_id=user_id, symbol=req.symbol, indicator=req.indicator,
             condition=req.condition, threshold=req.threshold, timeframe=req.timeframe,
-            notify_methods=req.notify_methods,
+            notify_methods=req.notify_methods, **_sched(req),
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -407,7 +429,7 @@ async def create_volume_alert(user_id: str, req: VolumeAlertRequest):
         return alerts_advanced.create_volume_alert(
             user_id=user_id, symbol=req.symbol, alert_type=req.alert_type,
             volume_threshold=req.volume_threshold, multiplier=req.multiplier,
-            notify_methods=req.notify_methods,
+            notify_methods=req.notify_methods, **_sched(req),
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

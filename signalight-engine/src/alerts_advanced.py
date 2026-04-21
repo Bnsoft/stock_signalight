@@ -7,106 +7,110 @@ from . import store
 
 # ============= Alert Templates =============
 
+def _schedule_kwargs(kwargs: dict) -> tuple:
+    """Extract schedule fields from kwargs, return tuple for INSERT."""
+    return (
+        1 if kwargs.get("schedule_enabled") else 0,
+        kwargs.get("schedule_type", "once"),
+        kwargs.get("schedule_time"),
+        kwargs.get("schedule_days", "daily"),
+        kwargs.get("schedule_start"),
+        kwargs.get("schedule_end"),
+        kwargs.get("schedule_interval", 5),
+    )
+
+
 def create_price_alert(
     user_id: str,
     symbol: str,
-    alert_type: str,  # "PRICE_ABOVE", "PRICE_BELOW", "PRICE_BETWEEN"
+    alert_type: str,
     trigger_price: float,
     trigger_price_high: Optional[float] = None,
-    notify_methods: List[str] = None,  # ["EMAIL", "PUSH", "SMS", "TELEGRAM"]
-    repeat_alert: bool = True
+    notify_methods: List[str] = None,
+    repeat_alert: bool = True,
+    **schedule_kwargs
 ) -> Dict:
-    """Create a price-based alert"""
     if notify_methods is None:
         notify_methods = ["PUSH"]
+    sched = _schedule_kwargs(schedule_kwargs)
 
     with store._connect() as conn:
         conn.execute(
             """INSERT INTO price_alerts
                (user_id, symbol, alert_type, trigger_price, trigger_price_high,
-                notify_methods, repeat_alert, is_active, created_at)
-               VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?)""",
+                notify_methods, repeat_alert, is_active, created_at,
+                schedule_enabled, schedule_type, schedule_time, schedule_days,
+                schedule_start, schedule_end, schedule_interval)
+               VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (user_id, symbol.upper(), alert_type, trigger_price, trigger_price_high,
-             ",".join(notify_methods), 1 if repeat_alert else 0, datetime.utcnow().isoformat())
+             ",".join(notify_methods), 1 if repeat_alert else 0,
+             datetime.utcnow().isoformat(), *sched)
         )
         conn.commit()
 
-    return {
-        "user_id": user_id,
-        "symbol": symbol,
-        "alert_type": alert_type,
-        "trigger_price": trigger_price,
-        "notify_methods": notify_methods,
-        "status": "ACTIVE"
-    }
+    return {"user_id": user_id, "symbol": symbol, "alert_type": alert_type,
+            "trigger_price": trigger_price, "notify_methods": notify_methods, "status": "ACTIVE"}
 
 
 def create_indicator_alert(
     user_id: str,
     symbol: str,
-    indicator: str,  # "RSI", "MACD", "BOLLINGER", "VOLUME", "MA"
-    condition: str,  # "ABOVE", "BELOW", "CROSS_ABOVE", "CROSS_BELOW"
+    indicator: str,
+    condition: str,
     threshold: float,
-    timeframe: str = "1D",  # "5M", "15M", "1H", "4H", "1D", "1W"
-    notify_methods: List[str] = None
+    timeframe: str = "1D",
+    notify_methods: List[str] = None,
+    **schedule_kwargs
 ) -> Dict:
-    """Create an indicator-based alert"""
     if notify_methods is None:
         notify_methods = ["PUSH"]
+    sched = _schedule_kwargs(schedule_kwargs)
 
     with store._connect() as conn:
         conn.execute(
             """INSERT INTO indicator_alerts
                (user_id, symbol, indicator, condition, threshold, timeframe,
-                notify_methods, is_active, created_at)
-               VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?)""",
+                notify_methods, is_active, created_at,
+                schedule_enabled, schedule_type, schedule_time, schedule_days,
+                schedule_start, schedule_end, schedule_interval)
+               VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (user_id, symbol.upper(), indicator, condition, threshold, timeframe,
-             ",".join(notify_methods), datetime.utcnow().isoformat())
+             ",".join(notify_methods), datetime.utcnow().isoformat(), *sched)
         )
         conn.commit()
 
-    return {
-        "user_id": user_id,
-        "symbol": symbol,
-        "indicator": indicator,
-        "condition": condition,
-        "threshold": threshold,
-        "timeframe": timeframe,
-        "status": "ACTIVE"
-    }
+    return {"user_id": user_id, "symbol": symbol, "indicator": indicator,
+            "condition": condition, "threshold": threshold, "status": "ACTIVE"}
 
 
 def create_volume_alert(
     user_id: str,
     symbol: str,
-    alert_type: str,  # "UNUSUAL_VOLUME", "VOLUME_ABOVE", "VOLUME_BELOW"
+    alert_type: str,
     volume_threshold: float,
-    multiplier: float = 2.0,  # How many times the average?
-    notify_methods: List[str] = None
+    multiplier: float = 2.0,
+    notify_methods: List[str] = None,
+    **schedule_kwargs
 ) -> Dict:
-    """Create a volume-based alert"""
     if notify_methods is None:
         notify_methods = ["PUSH"]
+    sched = _schedule_kwargs(schedule_kwargs)
 
     with store._connect() as conn:
         conn.execute(
             """INSERT INTO volume_alerts
                (user_id, symbol, alert_type, volume_threshold, multiplier,
-                notify_methods, is_active, created_at)
-               VALUES (?, ?, ?, ?, ?, ?, 1, ?)""",
+                notify_methods, is_active, created_at,
+                schedule_enabled, schedule_type, schedule_time, schedule_days,
+                schedule_start, schedule_end, schedule_interval)
+               VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (user_id, symbol.upper(), alert_type, volume_threshold, multiplier,
-             ",".join(notify_methods), datetime.utcnow().isoformat())
+             ",".join(notify_methods), datetime.utcnow().isoformat(), *sched)
         )
         conn.commit()
 
-    return {
-        "user_id": user_id,
-        "symbol": symbol,
-        "alert_type": alert_type,
-        "volume_threshold": volume_threshold,
-        "multiplier": multiplier,
-        "status": "ACTIVE"
-    }
+    return {"user_id": user_id, "symbol": symbol, "alert_type": alert_type,
+            "multiplier": multiplier, "status": "ACTIVE"}
 
 
 def create_portfolio_alert(

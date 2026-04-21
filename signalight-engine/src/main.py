@@ -102,7 +102,10 @@ async def _schedule_checker():
     import zoneinfo
     from datetime import datetime
 
-    await asyncio.sleep(30)
+    # Track fired "once" alerts this minute to avoid double-fire on drift
+    _fired_once: dict[str, str] = {}  # alert_key -> "HH:MM" when last fired
+
+    await asyncio.sleep(15)
     logger.info("Schedule checker started")
 
     while True:
@@ -116,39 +119,56 @@ async def _schedule_checker():
             with store._connect() as conn:
                 scheduled = []
                 for table, category in [("price_alerts", "PRICE"), ("indicator_alerts", "INDICATOR"), ("volume_alerts", "VOLUME")]:
-                    rows = conn.execute(
-                        f"SELECT id, symbol, notify_methods, schedule_days, schedule_type, "
-                        f"schedule_time, schedule_start, schedule_end, schedule_interval "
-                        f"FROM {table} WHERE schedule_enabled = 1 AND is_active = 1"
-                    ).fetchall()
+                    try:
+                        rows = conn.execute(
+                            f"SELECT id, symbol, notify_methods, schedule_days, schedule_type, "
+                            f"schedule_time, schedule_start, schedule_end, schedule_interval "
+                            f"FROM {table} WHERE schedule_enabled = 1 AND is_active = 1"
+                        ).fetchall()
+                    except Exception:
+                        continue
                     for r in rows:
                         scheduled.append({
+                            "key": f"{category}:{r[0]}",
                             "id": r[0], "symbol": r[1], "notify_methods": r[2],
                             "schedule_days": r[3], "schedule_type": r[4] or "once",
                             "schedule_time": r[5], "schedule_start": r[6],
-                            "schedule_end": r[7], "schedule_interval": r[8] or 5,
+                            "schedule_end": r[7], "schedule_interval": int(r[8] or 5),
                             "category": category,
                         })
 
             for alert in scheduled:
+                # Day-of-week check
                 days = (alert["schedule_days"] or "daily").lower()
-                day_ok = (days == "daily" or
-                          (days == "weekdays" and weekday in ("MON", "TUE", "WED", "THU", "FRI")) or
-                          weekday in days.upper())
+                day_ok = (
+                    days == "daily" or
+                    (days == "weekdays" and weekday in ("MON", "TUE", "WED", "THU", "FRI")) or
+                    weekday in days.upper()
+                )
                 if not day_ok:
                     continue
 
-                should_fire = False
                 stype = alert["schedule_type"]
+                should_fire = False
 
-                if stype == "once" and alert["schedule_time"] == current_time:
-                    should_fire = True
+                if stype == "once":
+                    sched_time = alert["schedule_time"]
+                    if sched_time:
+                        sh, sm = map(int, sched_time.split(":"))
+                        sched_min = sh * 60 + sm
+                        # Fire if within ±1 minute and not already fired this hour-minute
+                        if abs(current_minute - sched_min) <= 1:
+                            fired_key = _fired_once.get(alert["key"])
+                            if fired_key != current_time:
+                                should_fire = True
+                                _fired_once[alert["key"]] = current_time
+
                 elif stype == "interval" and alert["schedule_start"] and alert["schedule_end"]:
                     sh, sm = map(int, alert["schedule_start"].split(":"))
                     eh, em = map(int, alert["schedule_end"].split(":"))
                     start_min = sh * 60 + sm
                     end_min = eh * 60 + em
-                    interval = int(alert["schedule_interval"] or 5)
+                    interval = alert["schedule_interval"]
                     if start_min <= current_minute <= end_min and (current_minute - start_min) % interval == 0:
                         should_fire = True
 
@@ -161,8 +181,16 @@ async def _schedule_checker():
                     from .alerts_checker import check_user_alerts
                     from .alert import send_message
 
-                    df = await asyncio.get_event_loop().run_in_executor(None, fetch_daily_data, alert["symbol"], "1y")
+                    methods = (alert["notify_methods"] or "PUSH").upper()
+                    if "TELEGRAM" not in methods:
+                        logger.info(f"Scheduled alert skipped (no TELEGRAM): {alert['symbol']}")
+                        continue
+
+                    df = await asyncio.get_event_loop().run_in_executor(
+                        None, fetch_daily_data, alert["symbol"], "1y"
+                    )
                     if df.empty:
+                        logger.warning(f"No data for scheduled alert: {alert['symbol']}")
                         continue
 
                     indicators = get_all_indicators(df)
@@ -171,23 +199,25 @@ async def _schedule_checker():
                     avg_vol = float(df["Volume"].tail(20).mean()) if "Volume" in df.columns else 0
                     triggered = check_user_alerts(alert["symbol"], df, price, vol, avg_vol)
 
-                    methods = (alert["notify_methods"] or "PUSH").upper()
-                    if "TELEGRAM" not in methods:
-                        continue
-
                     mas = {p: calculate_ma(df, p) for p in (5, 20, 50, 120, 200)}
                     rsi_key = next((k for k in indicators if k.startswith("rsi_")), None)
                     rsi = indicators.get(rsi_key) if rsi_key else None
+                    dd = indicators.get("drawdown_pct")
 
-                    def _arrow(p, ma): return "↑" if p and ma and p > ma else "↓" if p and ma else "—"
+                    def _arrow(p, ma): return "↑" if p and ma and p > ma else "↓" if ma else "—"
+                    def _f(v): return f"${v:.2f}" if v else "—"
 
-                    label = "⏰ 예약" if stype == "once" else f"🔁 {alert['schedule_interval']}분 간격"
+                    label = f"⏰ {alert['schedule_time']}" if stype == "once" else f"🔁 {alert['schedule_interval']}분"
                     tg = (
                         f"{label} — <b>{alert['symbol']}</b>  ${price:.2f}\n"
-                        f"MA5 {f'${mas[5]:.2f}' if mas[5] else '—'} {_arrow(price, mas[5])}  "
-                        f"MA20 {f'${mas[20]:.2f}' if mas[20] else '—'} {_arrow(price, mas[20])}  "
-                        f"MA50 {f'${mas[50]:.2f}' if mas[50] else '—'} {_arrow(price, mas[50])}\n"
-                        f"RSI: {f'{rsi:.1f}' if rsi else '—'}\n"
+                        f"{'─' * 20}\n"
+                        f"MA5:  {_f(mas[5])} {_arrow(price, mas[5])}  "
+                        f"MA20: {_f(mas[20])} {_arrow(price, mas[20])}\n"
+                        f"MA50: {_f(mas[50])} {_arrow(price, mas[50])}  "
+                        f"MA120:{_f(mas[120])} {_arrow(price, mas[120])}\n"
+                        f"MA200:{_f(mas[200])} {_arrow(price, mas[200])}\n"
+                        f"RSI: {f'{rsi:.1f}' if rsi else '—'}  "
+                        f"DD: {f'{dd:.1f}%' if dd is not None else '—'}\n"
                     )
                     if triggered:
                         tg += "🚨 " + " | ".join(ua["message"] for ua in triggered)
@@ -195,14 +225,16 @@ async def _schedule_checker():
                         tg += "✅ 조건 미충족"
 
                     await send_message(tg)
-                    logger.info(f"Scheduled [{stype}] fired: {alert['symbol']}")
+                    logger.info(f"Scheduled [{stype}] fired OK: {alert['symbol']} @ {current_time}")
+
                 except Exception as e:
-                    logger.warning(f"Scheduled alert error for {alert.get('symbol')}: {e}")
+                    logger.warning(f"Scheduled alert error [{alert.get('symbol')}]: {e}", exc_info=True)
 
         except asyncio.CancelledError:
             break
         except Exception as e:
-            logger.error(f"Schedule checker error: {e}")
+            logger.error(f"Schedule checker loop error: {e}", exc_info=True)
+
         await asyncio.sleep(60)
 
 
