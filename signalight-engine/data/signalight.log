@@ -20954,3 +20954,46 @@ telegram.error.NetworkError: httpx.ReadError:
 2026-04-08 13:50:54  INFO      __main__ — Signalight engine starting...
 2026-04-08 13:51:05  INFO      __main__ — Signalight engine starting...
 2026-04-08 13:51:44  INFO      __main__ — Signalight engine starting...
+2026-04-20 22:51:31  INFO      __main__ — DRY RUN mode — no alerts will be sent, no DB writes
+2026-04-20 22:51:31  INFO      __main__ — Signalight engine starting...
+2026-04-20 22:51:31  INFO      src.store — SQLite database initialised with analytics tables
+2026-04-20 22:51:31  INFO      src.command — Telegram command handlers registered
+2026-04-20 22:51:31  INFO      apscheduler.scheduler — Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2026-04-20 22:51:31  INFO      apscheduler.scheduler — Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2026-04-20 22:51:31  INFO      src.store — Supabase client initialised
+2026-04-20 22:51:32  INFO      httpx — HTTP Request: GET https://btupwfxlcxygjhhdtvhm.supabase.co/rest/v1/watchlist?select=symbol%2Cname&active=eq.True&order=symbol.asc "HTTP/2 200 OK"
+2026-04-20 22:51:32  INFO      __main__ — Monitoring 7 symbols: ['AAPL', 'QLD', 'QQQ', 'QQQI', 'SPY', 'SPYI', 'TQQQ']
+2026-04-20 22:51:32  INFO      __main__ — Bot polling started
+2026-04-20 22:51:34  INFO      httpx — HTTP Request: POST https://api.telegram.org/bot8778355904:AAFmP4lt9YJUqYSkF64bBUJdBmoFC_jFsUE/getMe "HTTP/1.1 200 OK"
+2026-04-20 22:51:35  INFO      httpx — HTTP Request: POST https://api.telegram.org/bot8778355904:AAFmP4lt9YJUqYSkF64bBUJdBmoFC_jFsUE/getMe "HTTP/1.1 200 OK"
+2026-04-20 22:51:35  INFO      httpx — HTTP Request: POST https://api.telegram.org/bot8778355904:AAFmP4lt9YJUqYSkF64bBUJdBmoFC_jFsUE/sendMessage "HTTP/1.1 200 OK"
+2026-04-20 22:51:36  INFO      httpx — HTTP Request: POST https://api.telegram.org/bot8778355904:AAFmP4lt9YJUqYSkF64bBUJdBmoFC_jFsUE/deleteWebhook "HTTP/1.1 200 OK"
+2026-04-20 22:51:36  INFO      apscheduler.scheduler — Added job "scanner" to job store "default"
+2026-04-20 22:51:36  INFO      apscheduler.scheduler — Added job "daily_report" to job store "default"
+2026-04-20 22:51:36  INFO      apscheduler.scheduler — Scheduler started
+2026-04-20 22:51:36  INFO      telegram.ext.Application — Application started
+2026-04-20 22:53:45  INFO      __main__ — Signalight engine starting...
+2026-04-20 22:53:45  INFO      src.store — SQLite database initialised with analytics tables
+2026-04-20 22:53:45  INFO      src.command — Telegram command handlers registered
+2026-04-20 22:53:45  INFO      apscheduler.scheduler — Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2026-04-20 22:53:45  INFO      apscheduler.scheduler — Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2026-04-20 22:53:45  INFO      src.store — Supabase client initialised
+2026-04-20 22:53:46  INFO      httpx — HTTP Request: GET https://btupwfxlcxygjhhdtvhm.supabase.co/rest/v1/watchlist?select=symbol%2Cname&active=eq.True&order=symbol.asc "HTTP/2 200 OK"
+2026-04-20 22:53:46  INFO      __main__ — Monitoring 7 symbols: ['AAPL', 'QLD', 'QQQ', 'QQQI', 'SPY', 'SPYI', 'TQQQ']
+2026-04-20 22:53:46  INFO      __main__ — Bot polling started
+2026-04-20 22:53:47  INFO      httpx — HTTP Request: POST https://api.telegram.org/bot8778355904:AAFmP4lt9YJUqYSkF64bBUJdBmoFC_jFsUE/getMe "HTTP/1.1 200 OK"
+2026-04-20 22:53:48  INFO      httpx — HTTP Request: POST https://api.telegram.org/bot8778355904:AAFmP4lt9YJUqYSkF64bBUJdBmoFC_jFsUE/getMe "HTTP/1.1 200 OK"
+2026-04-20 22:53:48  INFO      httpx — HTTP Request: POST https://api.telegram.org/bot8778355904:AAFmP4lt9YJUqYSkF64bBUJdBmoFC_jFsUE/sendMessage "HTTP/1.1 200 OK"
+2026-04-20 22:53:49  INFO      httpx — HTTP Request: POST https://api.telegram.org/bot8778355904:AAFmP4lt9YJUqYSkF64bBUJdBmoFC_jFsUE/deleteWebhook "HTTP/1.1 200 OK"
+2026-04-20 22:53:49  INFO      apscheduler.scheduler — Added job "scanner" to job store "default"
+2026-04-20 22:53:49  INFO      apscheduler.scheduler — Added job "daily_report" to job store "default"
+2026-04-20 22:53:49  INFO      apscheduler.scheduler — Scheduler started
+2026-04-20 22:53:49  INFO      telegram.ext.Application — Application started
+2026-04-20 22:53:55  INFO      apscheduler.executors.default — Running job "scanner (trigger: interval[0:05:00], next run at: 2026-04-20 12:58:55 UTC)" (scheduled at 2026-04-20 12:53:55.359617+00:00)
+2026-04-20 22:53:55  INFO      __main__ — Market closed — scan skipped
+2026-04-20 22:53:55  INFO      apscheduler.executors.default — Job "scanner (trigger: interval[0:05:00], next run at: 2026-04-20 12:58:55 UTC)" executed successfully
+2026-04-20 22:54:00  INFO      httpx — HTTP Request: POST https://api.telegram.org/bot8778355904:AAFmP4lt9YJUqYSkF64bBUJdBmoFC_jFsUE/getUpdates "HTTP/1.1 200 OK"
+2026-04-20 22:54:10  INFO      httpx — HTTP Request: POST https://api.telegram.org/bot8778355904:AAFmP4lt9YJUqYSkF64bBUJdBmoFC_jFsUE/getUpdates "HTTP/1.1 200 OK"
+2026-04-20 22:54:20  INFO      httpx — HTTP Request: POST https://api.telegram.org/bot8778355904:AAFmP4lt9YJUqYSkF64bBUJdBmoFC_jFsUE/getUpdates "HTTP/1.1 200 OK"
+2026-04-20 22:54:30  INFO      httpx — HTTP Request: POST https://api.telegram.org/bot8778355904:AAFmP4lt9YJUqYSkF64bBUJdBmoFC_jFsUE/getUpdates "HTTP/1.1 200 OK"
+2026-04-20 22:54:41  INFO      httpx — HTTP Request: POST https://api.telegram.org/bot8778355904:AAFmP4lt9YJUqYSkF64bBUJdBmoFC_jFsUE/getUpdates "HTTP/1.1 200 OK"

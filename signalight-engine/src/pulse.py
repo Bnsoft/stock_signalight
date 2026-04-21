@@ -164,7 +164,7 @@ def calculate_ichimoku(df: pd.DataFrame) -> dict | None:
     kijun = ichimoku.ichimoku_base_line().iloc[-1]
     senkou_a = ichimoku.ichimoku_a().iloc[-1]
     senkou_b = ichimoku.ichimoku_b().iloc[-1]
-    chikou = ichimoku.ichimoku_c().iloc[-1]
+    chikou = df["close"].shift(-26).iloc[-1] if "close" in df.columns else float("nan")
 
     if any(pd.isna(x) for x in [tenkan, kijun, senkou_a, senkou_b, chikou]):
         return None

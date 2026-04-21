@@ -153,8 +153,10 @@ async def _scheduled_daily_report(context) -> None:
     await send_daily_report(all_indicators)
 
 
-def build_app() -> Application:
-    """Build and configure the Telegram Application."""
+def build_app(with_scheduler: bool = True) -> Application:
+    """Build and configure the Telegram Application.
+    with_scheduler=False skips job queue (used when FastAPI handles scanning).
+    """
     app = (
         Application.builder()
         .token(TELEGRAM_BOT_TOKEN)
@@ -164,20 +166,19 @@ def build_app() -> Application:
     app.bot_data["run_scan"] = run_scan
     register_commands(app)
 
-    interval_seconds = SIGNAL_CONFIG["scan_interval_minutes"] * 60
-
-    app.job_queue.run_repeating(
-        _scheduled_scan,
-        interval=interval_seconds,
-        first=10,
-        name="scanner",
-    )
-
-    app.job_queue.run_daily(
-        _scheduled_daily_report,
-        time=time(hour=20, minute=5, tzinfo=timezone.utc),
-        name="daily_report",
-    )
+    if with_scheduler:
+        interval_seconds = SIGNAL_CONFIG["scan_interval_minutes"] * 60
+        app.job_queue.run_repeating(
+            _scheduled_scan,
+            interval=interval_seconds,
+            first=10,
+            name="scanner",
+        )
+        app.job_queue.run_daily(
+            _scheduled_daily_report,
+            time=time(hour=20, minute=5, tzinfo=timezone.utc),
+            name="daily_report",
+        )
 
     return app
 

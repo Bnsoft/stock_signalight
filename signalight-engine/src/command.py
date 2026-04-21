@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from telegram import Update
 from telegram.ext import Application, CommandHandler, ContextTypes
@@ -97,52 +98,112 @@ async def cmd_price(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     symbol = context.args[0].upper()
     await update.message.reply_text(f"⏳ Fetching {symbol}...")
 
-    df = fetch_daily_data(symbol, period="6mo")
-    if df.empty:
-        await update.message.reply_text(f"❌ Could not fetch data for <b>{symbol}</b>. Invalid symbol?", parse_mode="HTML")
+    try:
+        loop = asyncio.get_event_loop()
+
+        # Fetch daily (1y for 200MA) and weekly data concurrently
+        df_daily, df_weekly = await asyncio.gather(
+            loop.run_in_executor(None, fetch_daily_data, symbol, "1y"),
+            loop.run_in_executor(None, fetch_daily_data, symbol, "5y"),
+        )
+    except Exception as e:
+        await update.message.reply_text(f"❌ 데이터 조회 실패: {e}")
         return
 
-    ind = get_all_indicators(df)
-    price  = ind.get("current_price", 0)
-    rsi_key = next((k for k in ind if k.startswith("rsi_")), None)
-    rsi    = ind.get(rsi_key) if rsi_key else None
-    ma20   = ind.get("ma_20")
-    ma60   = ind.get("ma_60")
-    macd   = ind.get("macd")
-    macd_s = ind.get("macd_signal")
-    bb_u   = ind.get("bollinger_upper")
-    bb_l   = ind.get("bollinger_lower")
-    dd     = ind.get("drawdown_pct")
-    ath    = ind.get("ath")
-    vol_r  = ind.get("volume_ratio")
+    if df_daily.empty:
+        await update.message.reply_text(f"❌ No data for <b>{symbol}</b>", parse_mode="HTML")
+        return
 
-    rsi_note = ""
-    if rsi is not None:
-        if rsi <= 30:
-            rsi_note = " 🔴 Oversold"
-        elif rsi <= 40:
-            rsi_note = " ⚠️ Near oversold"
-        elif rsi >= 70:
-            rsi_note = " 🔴 Overbought"
+    try:
+        from .pulse import calculate_ma
+        from ta.momentum import RSIIndicator
+        import pandas as pd
 
-    vol_note = f" ({vol_r:.1f}x avg)" if vol_r else ""
+        ind = get_all_indicators(df_daily)
+        price = ind.get("current_price", 0)
+        dd = ind.get("drawdown_pct")
+        ath = ind.get("ath")
 
-    text = (
-        f"📈 <b>{symbol}</b>\n"
-        f"{'─' * 22}\n"
-        f"<b>Price:</b>  ${price:.2f}\n"
-        f"{'─' * 22}\n"
-        f"<b>MA20:</b>   {f'${ma20:.2f}' if ma20 else '—'}\n"
-        f"<b>MA60:</b>   {f'${ma60:.2f}' if ma60 else '—'}\n"
-        f"<b>RSI:</b>    {f'{rsi:.1f}' if rsi else '—'}{rsi_note}\n"
-        f"<b>MACD:</b>   {f'{macd:.3f}' if macd else '—'}  (Signal: {f'{macd_s:.3f}' if macd_s else '—'})\n"
-        f"{'─' * 22}\n"
-        f"<b>Drawdown:</b> {f'{dd:.1f}%' if dd is not None else '—'}"
-        f"{f' from ATH (${ath:.2f})' if ath else ''}\n"
-        f"<b>Bollinger:</b> {f'${bb_l:.2f} — ${bb_u:.2f}' if bb_l and bb_u else '—'}\n"
-        f"<b>Volume:</b>  {str(ind['volume']) + vol_note if ind.get('volume') else '—'}"
-    )
-    await update.message.reply_text(text, parse_mode="HTML")
+        # Daily MAs (1y data)
+        d_mas = {p: calculate_ma(df_daily, p) for p in (5, 20, 50, 120, 200)}
+
+        # Weekly series from 5y daily data
+        col = "close" if "close" in df_weekly.columns else "Close"
+        wk_close = df_weekly[col].resample("W").last().dropna() if not df_weekly.empty and col in df_weekly.columns else pd.Series(dtype=float)
+        wk_vol   = df_weekly["volume"].resample("W").sum().dropna() if not df_weekly.empty and "volume" in df_weekly.columns else pd.Series(dtype=float)
+
+        def _wma(period: int):
+            if len(wk_close) < period:
+                return None
+            v = wk_close.rolling(period).mean().iloc[-1]
+            return round(float(v), 2) if pd.notna(v) else None
+
+        w_mas = {p: _wma(p) for p in (5, 20, 50, 120, 200)}
+
+        # Daily RSI
+        d_rsi = None
+        if len(df_daily) >= 15 and "close" in df_daily.columns:
+            v = RSIIndicator(close=df_daily["close"], window=14).rsi().iloc[-1]
+            d_rsi = round(float(v), 1) if pd.notna(v) else None
+
+        # Weekly RSI
+        w_rsi = None
+        if len(wk_close) >= 15:
+            v = RSIIndicator(close=wk_close, window=14).rsi().iloc[-1]
+            w_rsi = round(float(v), 1) if pd.notna(v) else None
+
+        # Volume stats
+        cur_vol = int(df_daily["volume"].iloc[-1]) if "volume" in df_daily.columns else 0
+        avg_vol_1y = int(df_daily["volume"].tail(252).mean()) if "volume" in df_daily.columns else 0
+        vol_pct = round((cur_vol - avg_vol_1y) / avg_vol_1y * 100, 1) if avg_vol_1y > 0 else 0
+        vol_sign = "+" if vol_pct >= 0 else ""
+
+        def _f(v):
+            return f"${v:.2f}" if v else "—"
+
+        def _arrow(p, ma):
+            if p and ma:
+                return "↑" if p > ma else "↓"
+            return ""
+
+        def _rsi_note(r):
+            if r is None: return ""
+            if r <= 30: return " 🔴과매도"
+            if r <= 40: return " ⚠️근접"
+            if r >= 70: return " 🔴과매수"
+            return ""
+
+        text = (
+            f"📈 <b>{symbol}</b>  ${price:.2f}\n"
+            f"{'─' * 24}\n"
+            f"<b>📊 일봉 이동평균선</b>\n"
+            f"  MA5:   {_f(d_mas[5])} {_arrow(price, d_mas[5])}\n"
+            f"  MA20:  {_f(d_mas[20])} {_arrow(price, d_mas[20])}\n"
+            f"  MA50:  {_f(d_mas[50])} {_arrow(price, d_mas[50])}\n"
+            f"  MA120: {_f(d_mas[120])} {_arrow(price, d_mas[120])}\n"
+            f"  MA200: {_f(d_mas[200])} {_arrow(price, d_mas[200])}\n"
+            f"  RSI:   {f'{d_rsi:.1f}' if d_rsi else '—'}{_rsi_note(d_rsi)}\n"
+            f"{'─' * 24}\n"
+            f"<b>📅 주봉 이동평균선</b>\n"
+            f"  MA5:   {_f(w_mas[5])} {_arrow(price, w_mas[5])}\n"
+            f"  MA20:  {_f(w_mas[20])} {_arrow(price, w_mas[20])}\n"
+            f"  MA50:  {_f(w_mas[50])} {_arrow(price, w_mas[50])}\n"
+            f"  MA120: {_f(w_mas[120])} {_arrow(price, w_mas[120])}\n"
+            f"  MA200: {_f(w_mas[200])} {_arrow(price, w_mas[200])}\n"
+            f"  RSI:   {f'{w_rsi:.1f}' if w_rsi else '—'}{_rsi_note(w_rsi)}\n"
+            f"{'─' * 24}\n"
+            f"<b>📊 거래량</b>\n"
+            f"  현재:    {cur_vol:,}\n"
+            f"  1년평균: {avg_vol_1y:,}\n"
+            f"  대비:    {vol_sign}{vol_pct}%\n"
+            f"{'─' * 24}\n"
+            f"<b>Drawdown:</b> {f'{dd:.1f}%' if dd is not None else '—'}"
+            f"{f' (ATH ${ath:.2f})' if ath else ''}"
+        )
+        await update.message.reply_text(text, parse_mode="HTML")
+    except Exception as e:
+        logger.error(f"cmd_price error for {symbol}: {e}", exc_info=True)
+        await update.message.reply_text(f"❌ 오류 발생: {e}")
 
 
 async def cmd_signals(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -187,14 +248,13 @@ async def cmd_watchlist(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
 
     await update.message.reply_text(f"⏳ Fetching prices for {len(wl)} symbols...")
 
+    loop = asyncio.get_event_loop()
+    prices = await asyncio.gather(*[loop.run_in_executor(None, fetch_current_price, e["symbol"]) for e in wl])
+
     lines = [f"👀 <b>Watchlist ({len(wl)} symbols)</b>", "─" * 22]
-    for entry in wl:
+    for entry, price in zip(wl, prices):
         sym = entry["symbol"]
-        price = fetch_current_price(sym)
-        if price:
-            lines.append(f"<b>{sym}</b>  ${price:.2f}")
-        else:
-            lines.append(f"<b>{sym}</b>  —")
+        lines.append(f"<b>{sym}</b>  {f'${price:.2f}' if price else '—'}")
 
     await update.message.reply_text("\n".join(lines), parse_mode="HTML")
 
@@ -264,11 +324,9 @@ async def cmd_report(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
     wl = get_watchlist()
     await update.message.reply_text(f"⏳ Building report for {len(wl)} symbols...")
 
-    all_indicators = {}
-    for entry in wl:
-        sym = entry["symbol"]
-        df = fetch_daily_data(sym, period="6mo")
-        all_indicators[sym] = get_all_indicators(df) if not df.empty else {}
+    loop = asyncio.get_event_loop()
+    dfs = await asyncio.gather(*[loop.run_in_executor(None, fetch_daily_data, e["symbol"], "6mo") for e in wl])
+    all_indicators = {e["symbol"]: (get_all_indicators(df) if not df.empty else {}) for e, df in zip(wl, dfs)}
 
     await send_daily_report(all_indicators)
     await update.message.reply_text("✅ Report sent.")

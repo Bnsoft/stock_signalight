@@ -3,302 +3,164 @@
 import { useEffect, useState } from "react"
 import Link from "next/link"
 import { useAuth } from "@/context/AuthContext"
-import { Button } from "@/components/ui/button"
 import { AnimateIn } from "@/components/layout/AnimateIn"
-import { ArrowRight, TrendingUp } from "lucide-react"
-import {
-  LineChart,
-  Line,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  Legend,
-  ResponsiveContainer,
-} from "recharts"
+import { TrendingUp, ArrowRight } from "lucide-react"
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts"
 import { formatCurrency } from "@/lib/calculator"
 
 interface BacktestResult {
-  id: number
-  symbol: string
-  start_date: string
-  end_date: string
-  initial_capital: number
-  final_capital: number
-  total_trades: number
-  winning_trades: number
-  losing_trades: number
-  win_rate_percent: number
-  total_roi_percent: number
-  max_drawdown_percent: number
-  created_at: string
+  id: number; symbol: string; start_date: string; end_date: string
+  initial_capital: number; final_capital: number; total_trades: number
+  winning_trades: number; losing_trades: number; win_rate_percent: number
+  total_roi_percent: number; max_drawdown_percent: number; created_at: string
 }
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"
+const cardCls = "bg-[#faf9f5] border border-[#f0eee6] rounded-2xl p-6 shadow-[rgba(0,0,0,0.05)_0px_4px_24px]"
+const tooltipStyle = { backgroundColor: "#faf9f5", border: "1px solid #f0eee6", borderRadius: "8px", color: "#141413", fontSize: "12px" }
 
 export default function BacktestCalculatorPage() {
-  const { user, token } = useAuth()
+  const { token } = useAuth()
   const [backtest, setBacktest] = useState<BacktestResult | null>(null)
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState("")
-  const [selectedSymbol, setSelectedSymbol] = useState("QQQ")
 
   useEffect(() => {
-    if (!token) return
-
-    const fetchBacktests = async () => {
-      try {
-        const res = await fetch(`${API_BASE}/api/backtest-results?limit=1`, {
-          headers: { Authorization: `Bearer ${token}` },
-        })
-
-        if (!res.ok) {
-          throw new Error("Failed to load backtest results")
-        }
-
-        const data = await res.json()
-        if (data.results && data.results.length > 0) {
-          setBacktest(data.results[0])
-        }
-      } catch (err: any) {
-        setError(err.message || "Error loading backtest data")
-      } finally {
-        setLoading(false)
-      }
-    }
-
-    fetchBacktests()
+    if (!token) { setLoading(false); return }
+    fetch(`${API_BASE}/api/backtest/results?limit=1`, { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => r.json()).then(d => { if (d.results?.length) setBacktest(d.results[0]) })
+      .catch(() => {}).finally(() => setLoading(false))
   }, [token])
 
-  // Generate mock equity curve for visualization
-  const generateEquityCurve = (initialCapital: number, finalCapital: number) => {
-    const days = 90
-    const data = []
-    const dailyGrowth = (finalCapital / initialCapital) ** (1 / days) - 1
+  const equityCurve = backtest ? Array.from({ length: 91 }, (_, i) => ({
+    day: i,
+    equity: backtest.initial_capital * Math.pow((backtest.final_capital / backtest.initial_capital) ** (1 / 90), i)
+  })) : []
 
-    for (let i = 0; i <= days; i++) {
-      data.push({
-        day: i,
-        equity: initialCapital * Math.pow(1 + dailyGrowth, i),
-      })
-    }
-    return data
-  }
-
-  const handleUseForCalculator = () => {
-    if (!backtest) return
-    // Navigate to calculator with backtest data pre-populated
-    const roiPercent = backtest.total_roi_percent
-    window.location.href =
-      `/dashboard/calculator?roi=${roiPercent}&period=90&principal=10000`
-  }
-
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-background p-6">
-        <div className="max-w-6xl mx-auto">
-          <div className="animate-pulse space-y-4">
-            <div className="h-8 bg-muted rounded" />
-            <div className="h-40 bg-muted rounded" />
-          </div>
-        </div>
-      </div>
-    )
-  }
+  if (loading) return (
+    <div className="min-h-screen bg-[#f5f4ed] p-8 flex items-center justify-center">
+      <p className="text-[#87867f]">로딩 중...</p>
+    </div>
+  )
 
   return (
-    <div className="min-h-screen bg-background p-6">
-      <div className="max-w-6xl mx-auto">
+    <div className="min-h-screen bg-[#f5f4ed] p-8">
+      <div className="max-w-5xl mx-auto">
         <AnimateIn from="bottom">
           <div className="mb-8">
-            <h1 className="text-3xl font-bold mb-2">Backtest-Based Calculator</h1>
-            <p className="text-muted-foreground">
-              Use historical performance to project future returns
-            </p>
+            <h1 className="text-3xl font-medium text-[#141413] leading-tight mb-1" style={{ fontFamily: "Georgia, serif" }}>
+              백테스트 계산기
+            </h1>
+            <p className="text-[#87867f] text-sm">과거 성과를 기반으로 미래 수익을 예측합니다</p>
           </div>
         </AnimateIn>
 
-        {error && (
-          <AnimateIn from="bottom">
-            <div className="mb-6 p-4 bg-destructive/10 border border-destructive/30 rounded-lg text-destructive text-sm">
-              {error}
-            </div>
-          </AnimateIn>
-        )}
-
         {!backtest ? (
-          <AnimateIn from="bottom" delay={80}>
-            <div className="bg-card border border-border rounded-lg p-12 text-center">
-              <TrendingUp className="w-12 h-12 text-muted-foreground mx-auto mb-4 opacity-50" />
-              <h3 className="text-lg font-semibold mb-2">No Backtest Results Yet</h3>
-              <p className="text-muted-foreground mb-6">
-                Run a backtest first to see historical performance and projections
-              </p>
-              <div className="flex gap-4 justify-center">
-                <Link href="/dashboard/backtest">
-                  <Button>
-                    Run Backtest
-                    <ArrowRight className="w-4 h-4 ml-2" />
-                  </Button>
-                </Link>
-                <Link href="/dashboard/calculator">
-                  <Button variant="outline">Go to Calculator</Button>
-                </Link>
+          <AnimateIn from="bottom" delay={60}>
+            <div className={`${cardCls} text-center py-16`}>
+              <div className="w-12 h-12 bg-[#e8e6dc] rounded-xl flex items-center justify-center mx-auto mb-4">
+                <TrendingUp size={22} className="text-[#87867f]" />
               </div>
+              <h3 className="text-lg font-medium text-[#141413] mb-2" style={{ fontFamily: "Georgia, serif" }}>
+                백테스트 결과 없음
+              </h3>
+              <p className="text-[#87867f] text-sm mb-6">먼저 백테스트를 실행해 주세요</p>
+              <Link href="/dashboard/calculator"
+                className="inline-flex items-center gap-2 px-5 py-2.5 bg-[#c96442] text-[#faf9f5] rounded-xl text-sm font-medium hover:bg-[#b8573b] transition-colors">
+                계산기로 이동 <ArrowRight size={14} />
+              </Link>
             </div>
           </AnimateIn>
         ) : (
           <>
-            {/* Backtest Summary */}
-            <AnimateIn from="bottom" delay={80}>
-              <div className="bg-gradient-to-br from-primary/10 to-primary/5 border border-primary/30 rounded-lg p-6 mb-6">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                  <div>
-                    <p className="text-xs text-muted-foreground mb-1">Symbol</p>
-                    <p className="text-2xl font-bold">{backtest.symbol}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-muted-foreground mb-1">Total ROI</p>
-                    <p className="text-2xl font-bold text-green-600">
-                      {backtest.total_roi_percent.toFixed(2)}%
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-muted-foreground mb-1">Win Rate</p>
-                    <p className="text-2xl font-bold text-blue-600">
-                      {backtest.win_rate_percent.toFixed(1)}%
-                    </p>
-                  </div>
+            {/* Summary */}
+            <AnimateIn from="bottom" delay={60}>
+              <div className={`${cardCls} mb-5`}>
+                <p className="text-xs font-medium text-[#87867f] uppercase tracking-wide mb-4">결과 요약</p>
+                <div className="grid grid-cols-3 gap-6 mb-5">
+                  {[
+                    { label: "심볼", value: backtest.symbol, color: "text-[#141413]" },
+                    { label: "총 ROI", value: `${backtest.total_roi_percent.toFixed(2)}%`, color: "text-[#2d6a4f]" },
+                    { label: "승률", value: `${backtest.win_rate_percent.toFixed(1)}%`, color: "text-[#c96442]" },
+                  ].map(item => (
+                    <div key={item.label}>
+                      <p className="text-xs text-[#87867f] mb-1">{item.label}</p>
+                      <p className={`text-2xl font-medium ${item.color}`}>{item.value}</p>
+                    </div>
+                  ))}
                 </div>
-
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-6 pt-6 border-t border-primary/30">
-                  <div>
-                    <p className="text-xs text-muted-foreground mb-1">Initial Capital</p>
-                    <p className="font-semibold">
-                      {formatCurrency(backtest.initial_capital)}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-muted-foreground mb-1">Final Capital</p>
-                    <p className="font-semibold text-green-600">
-                      {formatCurrency(backtest.final_capital)}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-muted-foreground mb-1">Total Trades</p>
-                    <p className="font-semibold">{backtest.total_trades}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-muted-foreground mb-1">Max Drawdown</p>
-                    <p className="font-semibold text-orange-600">
-                      {backtest.max_drawdown_percent.toFixed(2)}%
-                    </p>
-                  </div>
+                <div className="grid grid-cols-4 gap-4 pt-5 border-t border-[#f0eee6]">
+                  {[
+                    { label: "초기 자본", value: formatCurrency(backtest.initial_capital) },
+                    { label: "최종 자본", value: formatCurrency(backtest.final_capital) },
+                    { label: "총 거래", value: String(backtest.total_trades) },
+                    { label: "최대 낙폭", value: `${backtest.max_drawdown_percent.toFixed(2)}%` },
+                  ].map(item => (
+                    <div key={item.label}>
+                      <p className="text-xs text-[#87867f] mb-1">{item.label}</p>
+                      <p className="text-sm font-medium text-[#141413]">{item.value}</p>
+                    </div>
+                  ))}
                 </div>
               </div>
             </AnimateIn>
 
-            {/* Equity Curve */}
-            <AnimateIn from="bottom" delay={160}>
-              <div className="bg-card border border-border rounded-lg p-6 mb-6">
-                <h3 className="text-lg font-semibold mb-4">Equity Curve (90 Days)</h3>
-                <div className="h-72">
+            {/* Chart */}
+            <AnimateIn from="bottom" delay={120}>
+              <div className={`${cardCls} mb-5`}>
+                <p className="text-xs font-medium text-[#87867f] uppercase tracking-wide mb-4">수익 곡선 (90일)</p>
+                <div className="h-64">
                   <ResponsiveContainer width="100%" height="100%">
-                    <LineChart
-                      data={generateEquityCurve(
-                        backtest.initial_capital,
-                        backtest.final_capital
-                      )}
-                    >
-                      <CartesianGrid strokeDasharray="3 3" stroke="#333" />
-                      <XAxis
-                        dataKey="day"
-                        stroke="#999"
-                        label={{ value: "Days", position: "insideRight", offset: -5 }}
-                      />
-                      <YAxis stroke="#999" />
-                      <Tooltip
-                        contentStyle={{ backgroundColor: "#1a1a1a", border: "1px solid #333" }}
-                        formatter={(value) => formatCurrency(Number(value))}
-                      />
+                    <LineChart data={equityCurve}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#f0eee6" />
+                      <XAxis dataKey="day" stroke="#87867f" tick={{ fontSize: 11 }} />
+                      <YAxis stroke="#87867f" tick={{ fontSize: 11 }} />
+                      <Tooltip contentStyle={tooltipStyle} formatter={v => formatCurrency(Number(v))} />
                       <Legend />
-                      <Line
-                        type="monotone"
-                        dataKey="equity"
-                        stroke="#10b981"
-                        dot={false}
-                        name="Account Value"
-                        strokeWidth={2}
-                      />
+                      <Line type="monotone" dataKey="equity" stroke="#c96442" dot={false} name="자산 가치" strokeWidth={2} />
                     </LineChart>
                   </ResponsiveContainer>
                 </div>
               </div>
             </AnimateIn>
 
-            {/* Details & Actions */}
-            <AnimateIn from="bottom" delay={240}>
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                {/* Trade Stats */}
-                <div className="lg:col-span-2 bg-card border border-border rounded-lg p-6">
-                  <h3 className="text-lg font-semibold mb-4">Trade Statistics</h3>
-                  <div className="space-y-3">
-                    <div className="flex justify-between items-center p-3 bg-muted/50 rounded">
-                      <span className="text-sm">Winning Trades</span>
-                      <span className="font-semibold text-green-600">
-                        {backtest.winning_trades}
-                      </span>
-                    </div>
-                    <div className="flex justify-between items-center p-3 bg-muted/50 rounded">
-                      <span className="text-sm">Losing Trades</span>
-                      <span className="font-semibold text-red-600">
-                        {backtest.losing_trades}
-                      </span>
-                    </div>
-                    <div className="flex justify-between items-center p-3 bg-muted/50 rounded">
-                      <span className="text-sm">Win Rate</span>
-                      <span className="font-semibold">
-                        {backtest.win_rate_percent.toFixed(1)}%
-                      </span>
-                    </div>
-                    <div className="flex justify-between items-center p-3 bg-muted/50 rounded">
-                      <span className="text-sm">Period</span>
-                      <span className="font-semibold">
-                        ~90 days (
-                        {new Date(backtest.start_date).toLocaleDateString()} to{" "}
-                        {new Date(backtest.end_date).toLocaleDateString()})
-                      </span>
-                    </div>
+            {/* Stats + CTA */}
+            <AnimateIn from="bottom" delay={180}>
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+                <div className={`${cardCls} lg:col-span-2`}>
+                  <p className="text-xs font-medium text-[#87867f] uppercase tracking-wide mb-4">거래 통계</p>
+                  <div className="space-y-2">
+                    {[
+                      { label: "승리 거래", value: backtest.winning_trades, color: "text-[#2d6a4f]" },
+                      { label: "패배 거래", value: backtest.losing_trades, color: "text-[#b53333]" },
+                      { label: "승률", value: `${backtest.win_rate_percent.toFixed(1)}%`, color: "text-[#141413]" },
+                      { label: "기간", value: `${new Date(backtest.start_date).toLocaleDateString("ko-KR")} — ${new Date(backtest.end_date).toLocaleDateString("ko-KR")}`, color: "text-[#141413]" },
+                    ].map(item => (
+                      <div key={item.label} className="flex justify-between items-center px-4 py-2.5 bg-[#f5f4ed] rounded-xl">
+                        <span className="text-sm text-[#5e5d59]">{item.label}</span>
+                        <span className={`text-sm font-medium ${item.color}`}>{item.value}</span>
+                      </div>
+                    ))}
                   </div>
                 </div>
 
-                {/* Use For Calculator */}
-                <div className="bg-gradient-to-br from-primary/10 to-primary/5 border border-primary/30 rounded-lg p-6 flex flex-col justify-between">
-                  <div>
-                    <h3 className="text-lg font-semibold mb-3">Use for Projection</h3>
-                    <p className="text-sm text-muted-foreground">
-                      Project future returns based on this backtest's {backtest.total_roi_percent.toFixed(2)}% ROI
-                    </p>
-                  </div>
-                  <Button
-                    onClick={handleUseForCalculator}
-                    className="w-full mt-4"
+                <div className={cardCls}>
+                  <p className="text-xs font-medium text-[#87867f] uppercase tracking-wide mb-3">계산기에서 활용</p>
+                  <p className="text-sm text-[#5e5d59] mb-5 leading-relaxed">
+                    이 백테스트의 {backtest.total_roi_percent.toFixed(2)}% ROI를 기반으로 미래 수익을 시뮬레이션합니다
+                  </p>
+                  <Link
+                    href={`/dashboard/calculator?roi=${backtest.total_roi_percent}&period=90&principal=10000`}
+                    className="flex items-center justify-center gap-2 w-full px-4 py-2.5 bg-[#c96442] text-[#faf9f5] rounded-xl text-sm font-medium hover:bg-[#b8573b] transition-colors"
                   >
-                    <TrendingUp className="w-4 h-4 mr-2" />
-                    Open Calculator
-                  </Button>
+                    <TrendingUp size={15} /> 계산기 열기
+                  </Link>
                 </div>
               </div>
             </AnimateIn>
 
-            {/* Info */}
-            <AnimateIn from="bottom" delay={320}>
-              <div className="mt-8 p-4 bg-muted/50 border border-border/50 rounded-lg text-sm text-muted-foreground">
-                <p>
-                  <strong>Note:</strong> Past performance does not guarantee future results.
-                  Use this calculator to understand the potential impact of different market
-                  conditions and tax strategies on your returns.
-                </p>
+            <AnimateIn from="bottom" delay={240}>
+              <div className="mt-6 px-5 py-4 bg-[#faf9f5] border border-[#f0eee6] rounded-xl text-xs text-[#87867f] leading-relaxed">
+                과거 성과는 미래 결과를 보장하지 않습니다. 다양한 시장 상황과 세금 전략을 고려해 수익을 분석하세요.
               </div>
             </AnimateIn>
           </>

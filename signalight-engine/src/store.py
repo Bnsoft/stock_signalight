@@ -521,6 +521,96 @@ def init_db() -> None:
             CREATE INDEX IF NOT EXISTS idx_auto_trades_user ON auto_trades(user_id);
             CREATE INDEX IF NOT EXISTS idx_community_posts_user ON community_posts(user_id);
             CREATE INDEX IF NOT EXISTS idx_leaderboard_month ON leaderboard(month);
+
+            CREATE TABLE IF NOT EXISTS price_alerts (
+                id            INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id       TEXT NOT NULL,
+                symbol        TEXT NOT NULL,
+                alert_type    TEXT NOT NULL,
+                trigger_price REAL NOT NULL,
+                trigger_price_high REAL,
+                notify_methods TEXT DEFAULT 'PUSH',
+                repeat_alert  INTEGER DEFAULT 1,
+                is_active     INTEGER DEFAULT 1,
+                created_at    DATETIME DEFAULT CURRENT_TIMESTAMP
+            );
+
+            CREATE TABLE IF NOT EXISTS indicator_alerts (
+                id            INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id       TEXT NOT NULL,
+                symbol        TEXT NOT NULL,
+                indicator     TEXT NOT NULL,
+                condition     TEXT NOT NULL,
+                threshold     REAL NOT NULL,
+                timeframe     TEXT DEFAULT '1D',
+                notify_methods TEXT DEFAULT 'PUSH',
+                is_active     INTEGER DEFAULT 1,
+                created_at    DATETIME DEFAULT CURRENT_TIMESTAMP
+            );
+
+            CREATE TABLE IF NOT EXISTS volume_alerts (
+                id               INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id          TEXT NOT NULL,
+                symbol           TEXT NOT NULL,
+                alert_type       TEXT NOT NULL,
+                volume_threshold REAL NOT NULL,
+                multiplier       REAL DEFAULT 2.0,
+                notify_methods   TEXT DEFAULT 'PUSH',
+                is_active        INTEGER DEFAULT 1,
+                created_at       DATETIME DEFAULT CURRENT_TIMESTAMP
+            );
+
+            CREATE TABLE IF NOT EXISTS portfolio_alerts (
+                id             INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id        TEXT NOT NULL,
+                alert_type     TEXT NOT NULL,
+                threshold      REAL NOT NULL,
+                notify_methods TEXT DEFAULT 'PUSH',
+                is_active      INTEGER DEFAULT 1,
+                created_at     DATETIME DEFAULT CURRENT_TIMESTAMP
+            );
+
+            CREATE TABLE IF NOT EXISTS news_alerts (
+                id             INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id        TEXT NOT NULL,
+                symbol         TEXT NOT NULL,
+                keywords       TEXT,
+                sentiment      TEXT DEFAULT 'ALL',
+                notify_methods TEXT DEFAULT 'PUSH',
+                is_active      INTEGER DEFAULT 1,
+                created_at     DATETIME DEFAULT CURRENT_TIMESTAMP
+            );
+
+            CREATE TABLE IF NOT EXISTS time_alerts (
+                id             INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id        TEXT NOT NULL,
+                symbol         TEXT NOT NULL,
+                alert_time     TEXT NOT NULL,
+                message        TEXT,
+                recurring      TEXT DEFAULT 'DAILY',
+                days_of_week   TEXT,
+                notify_methods TEXT DEFAULT 'PUSH',
+                is_active      INTEGER DEFAULT 1,
+                created_at     DATETIME DEFAULT CURRENT_TIMESTAMP
+            );
+
+            CREATE TABLE IF NOT EXISTS composite_alerts (
+                id             INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id        TEXT NOT NULL,
+                symbol         TEXT NOT NULL,
+                conditions     TEXT NOT NULL,
+                logic          TEXT DEFAULT 'AND',
+                notify_methods TEXT DEFAULT 'PUSH',
+                is_active      INTEGER DEFAULT 1,
+                created_at     DATETIME DEFAULT CURRENT_TIMESTAMP
+            );
+
+            CREATE TABLE IF NOT EXISTS alert_fire_log (
+                id             INTEGER PRIMARY KEY AUTOINCREMENT,
+                alert_id       INTEGER NOT NULL,
+                alert_category TEXT NOT NULL,
+                fired_at       DATETIME DEFAULT CURRENT_TIMESTAMP
+            );
         """)
     _seed_watchlist()
     logger.info("SQLite database initialised with analytics tables")

@@ -23,85 +23,87 @@
   --color-primary: var(--primary);
   --color-card-foreground: var(--card-foreground);
   --color-card: var(--card);
+  --color-terracotta: var(--terracotta);
   --color-signal-green: var(--signal-green);
   --color-signal-red: var(--signal-red);
   --color-signal-amber: var(--signal-amber);
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-xl: calc(var(--radius) * 1.5);
 }
 
-/* ── Light mode ─────────────────────────────────────────── */
+/* ── Claude Light (Parchment) ────────────────────────── */
 :root {
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(0.97 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.94 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.94 0 0);
-  --muted-foreground: oklch(0.45 0 0);
-  --accent: oklch(0.94 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.88 0 0);
-  --input: oklch(0.88 0 0);
-  --ring: oklch(0.6 0 0);
-  --radius: 0.625rem;
-  --signal-green: oklch(0.527 0.154 150.069);
-  --signal-red: oklch(0.577 0.245 27.325);
-  --signal-amber: oklch(0.7 0.18 60);
+  --background: #f5f4ed;       /* Parchment */
+  --foreground: #141413;       /* Anthropic Near Black */
+  --card: #faf9f5;             /* Ivory */
+  --card-foreground: #141413;
+  --popover: #faf9f5;
+  --popover-foreground: #141413;
+  --primary: #c96442;          /* Terracotta Brand */
+  --primary-foreground: #faf9f5;
+  --secondary: #e8e6dc;        /* Warm Sand */
+  --secondary-foreground: #4d4c48; /* Charcoal Warm */
+  --muted: #e8e6dc;
+  --muted-foreground: #5e5d59; /* Olive Gray */
+  --accent: #e8e6dc;
+  --accent-foreground: #141413;
+  --destructive: #b53333;      /* Error Crimson */
+  --border: #f0eee6;           /* Border Cream */
+  --input: #f0eee6;
+  --ring: #3898ec;             /* Focus Blue */
+  --radius: 0.5rem;            /* 8px — comfortably rounded */
+  --terracotta: #c96442;
+  --signal-green: #2d6a4f;
+  --signal-red: #b53333;
+  --signal-amber: #92600a;
 }
 
-/* ── Dark mode ──────────────────────────────────────────── */
+/* ── Claude Dark (Near Black) ────────────────────────── */
 .dark {
-  --background: oklch(0.09 0 0);
-  --foreground: oklch(0.97 0 0);
-  --card: oklch(0.13 0 0);
-  --card-foreground: oklch(0.97 0 0);
-  --popover: oklch(0.13 0 0);
-  --popover-foreground: oklch(0.97 0 0);
-  --primary: oklch(0.92 0 0);
-  --primary-foreground: oklch(0.13 0 0);
-  --secondary: oklch(0.18 0 0);
-  --secondary-foreground: oklch(0.97 0 0);
-  --muted: oklch(0.18 0 0);
-  --muted-foreground: oklch(0.55 0 0);
-  --accent: oklch(0.18 0 0);
-  --accent-foreground: oklch(0.97 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 8%);
-  --input: oklch(1 0 0 / 12%);
-  --ring: oklch(0.5 0 0);
-  --signal-green: oklch(0.643 0.177 150.069);
-  --signal-red: oklch(0.704 0.191 22.216);
-  --signal-amber: oklch(0.78 0.18 60);
+  --background: #141413;       /* Deep Dark */
+  --foreground: #faf9f5;       /* Ivory */
+  --card: #30302e;             /* Dark Surface */
+  --card-foreground: #faf9f5;
+  --popover: #30302e;
+  --popover-foreground: #faf9f5;
+  --primary: #c96442;
+  --primary-foreground: #faf9f5;
+  --secondary: #3d3d3a;
+  --secondary-foreground: #faf9f5;
+  --muted: #30302e;
+  --muted-foreground: #b0aea5; /* Warm Silver */
+  --accent: #3d3d3a;
+  --accent-foreground: #faf9f5;
+  --destructive: #b53333;
+  --border: #30302e;
+  --input: #30302e;
+  --ring: #3898ec;
+  --terracotta: #d97757;       /* Coral Accent — lighter on dark */
+  --signal-green: #52b788;
+  --signal-red: #e07070;
+  --signal-amber: #e0a84a;
 }
 
 @layer base {
-  * {
-    @apply border-border outline-ring/50;
-  }
-  body {
-    @apply bg-background text-foreground;
-  }
-  html {
-    @apply scroll-smooth;
-  }
+  * { @apply border-border outline-ring/50; }
+  body { @apply bg-background text-foreground; }
+  html { @apply scroll-smooth; }
 }
 
 @layer utilities {
+  .font-serif { font-family: Georgia, 'Times New Roman', serif; }
   .text-signal-green { color: var(--signal-green); }
   .text-signal-red   { color: var(--signal-red); }
   .text-signal-amber { color: var(--signal-amber); }
-  .bg-signal-green   { background-color: var(--signal-green); }
-  .border-signal-green { border-color: var(--signal-green); }
-  .glow-green {
-    box-shadow: 0 0 20px oklch(0.643 0.177 150.069 / 25%);
+  .bg-terracotta     { background-color: var(--terracotta); }
+  .text-terracotta   { color: var(--terracotta); }
+  .border-terracotta { border-color: var(--terracotta); }
+  .ring-warm {
+    box-shadow: 0px 0px 0px 1px #d1cfc5;
+  }
+  .shadow-whisper {
+    box-shadow: rgba(0,0,0,0.05) 0px 4px 24px;
   }
 }
