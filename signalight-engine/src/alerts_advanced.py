@@ -243,21 +243,24 @@ def get_all_alerts(user_id: str) -> Dict:
     with store._connect() as conn:
         price_alerts = conn.execute(
             """SELECT id, symbol, alert_type, trigger_price, is_active, notify_methods,
-                      schedule_enabled, schedule_time, schedule_days FROM price_alerts
-               WHERE user_id = ? ORDER BY created_at DESC""",
+                      schedule_enabled, schedule_time, schedule_days,
+                      schedule_type, schedule_start, schedule_end, schedule_interval
+               FROM price_alerts WHERE user_id = ? ORDER BY created_at DESC""",
             (user_id,)
         ).fetchall()
 
         indicator_alerts = conn.execute(
             """SELECT id, symbol, indicator, condition, threshold, timeframe, is_active, notify_methods,
-                      schedule_enabled, schedule_time, schedule_days
+                      schedule_enabled, schedule_time, schedule_days,
+                      schedule_type, schedule_start, schedule_end, schedule_interval
                FROM indicator_alerts WHERE user_id = ? ORDER BY created_at DESC""",
             (user_id,)
         ).fetchall()
 
         volume_alerts = conn.execute(
             """SELECT id, symbol, alert_type, volume_threshold, is_active, notify_methods,
-                      schedule_enabled, schedule_time, schedule_days
+                      schedule_enabled, schedule_time, schedule_days,
+                      schedule_type, schedule_start, schedule_end, schedule_interval
                FROM volume_alerts WHERE user_id = ? ORDER BY created_at DESC""",
             (user_id,)
         ).fetchall()
@@ -284,19 +287,22 @@ def get_all_alerts(user_id: str) -> Dict:
         "price_alerts": [
             {"id": p[0], "symbol": p[1], "type": p[2], "trigger": p[3], "active": bool(p[4]),
              "notify_methods": (p[5] or "PUSH").split(","),
-             "schedule_enabled": bool(p[6]), "schedule_time": p[7], "schedule_days": p[8]}
+             "schedule_enabled": bool(p[6]), "schedule_time": p[7], "schedule_days": p[8],
+             "schedule_type": p[9] or "once", "schedule_start": p[10], "schedule_end": p[11], "schedule_interval": p[12] or 5}
             for p in price_alerts
         ],
         "indicator_alerts": [
             {"id": i[0], "symbol": i[1], "indicator": i[2], "condition": i[3], "threshold": i[4],
              "timeframe": i[5], "active": bool(i[6]), "notify_methods": (i[7] or "PUSH").split(","),
-             "schedule_enabled": bool(i[8]), "schedule_time": i[9], "schedule_days": i[10]}
+             "schedule_enabled": bool(i[8]), "schedule_time": i[9], "schedule_days": i[10],
+             "schedule_type": i[11] or "once", "schedule_start": i[12], "schedule_end": i[13], "schedule_interval": i[14] or 5}
             for i in indicator_alerts
         ],
         "volume_alerts": [
             {"id": v[0], "symbol": v[1], "type": v[2], "threshold": v[3], "active": bool(v[4]),
              "notify_methods": (v[5] or "PUSH").split(","),
-             "schedule_enabled": bool(v[6]), "schedule_time": v[7], "schedule_days": v[8]}
+             "schedule_enabled": bool(v[6]), "schedule_time": v[7], "schedule_days": v[8],
+             "schedule_type": v[9] or "once", "schedule_start": v[10], "schedule_end": v[11], "schedule_interval": v[12] or 5}
             for v in volume_alerts
         ],
         "portfolio_alerts": [

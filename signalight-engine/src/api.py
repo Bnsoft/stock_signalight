@@ -447,8 +447,12 @@ class AlertUpdateRequest(BaseModel):
     multiplier: Optional[float] = None
     notify_methods: Optional[List[str]] = None
     schedule_enabled: Optional[bool] = None
-    schedule_time: Optional[str] = None   # "HH:MM"
-    schedule_days: Optional[str] = None   # "daily" | "weekdays" | "MON,WED,FRI"
+    schedule_type: Optional[str] = None      # "once" | "interval"
+    schedule_time: Optional[str] = None      # "HH:MM" (for once)
+    schedule_days: Optional[str] = None      # "daily" | "weekdays" | "MON,WED,FRI"
+    schedule_start: Optional[str] = None     # "HH:MM" (for interval)
+    schedule_end: Optional[str] = None       # "HH:MM" (for interval)
+    schedule_interval: Optional[int] = None  # minutes: 5, 10, 30, 60
 
 
 @app.put("/api/alerts/{alert_id}")

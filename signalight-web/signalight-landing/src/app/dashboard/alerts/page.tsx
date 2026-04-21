@@ -33,8 +33,12 @@ interface Alert {
   lastTriggered?: string
   notificationChannels: string[]
   scheduleEnabled?: boolean
+  scheduleType?: string
   scheduleTime?: string
   scheduleDays?: string
+  scheduleStart?: string
+  scheduleEnd?: string
+  scheduleInterval?: number
 }
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"
@@ -79,8 +83,12 @@ export default function AlertsPage() {
     volumeMultiplier: "2",
     notificationChannels: [] as string[],
     scheduleEnabled: false,
+    scheduleType: "once",
     scheduleTime: "07:00",
     scheduleDays: "daily",
+    scheduleStart: "09:30",
+    scheduleEnd: "16:00",
+    scheduleInterval: "5",
   }
   const [formData, setFormData] = useState(defaultForm)
 
@@ -137,21 +145,27 @@ export default function AlertsPage() {
           name: `${a.symbol} 가격알람`, condition: a.type as string,
           threshold: a.trigger as number, enabled: a.active as boolean,
           createdDate: "", notificationChannels: (a.notify_methods as string[]) || [],
-          scheduleEnabled: a.schedule_enabled as boolean, scheduleTime: a.schedule_time as string, scheduleDays: a.schedule_days as string,
+          scheduleEnabled: a.schedule_enabled as boolean, scheduleType: a.schedule_type as string,
+          scheduleTime: a.schedule_time as string, scheduleDays: a.schedule_days as string,
+          scheduleStart: a.schedule_start as string, scheduleEnd: a.schedule_end as string, scheduleInterval: a.schedule_interval as number,
         })),
         ...(data.indicator_alerts || []).map((a: Record<string, unknown>) => ({
           id: `INDICATOR:${a.id}`, type: "ma", symbol: a.symbol as string,
           name: `${a.symbol} MA${a.threshold}(${a.timeframe})`, condition: a.condition as string,
           threshold: a.threshold as number, enabled: a.active as boolean,
           createdDate: "", notificationChannels: (a.notify_methods as string[]) || [],
-          scheduleEnabled: a.schedule_enabled as boolean, scheduleTime: a.schedule_time as string, scheduleDays: a.schedule_days as string,
+          scheduleEnabled: a.schedule_enabled as boolean, scheduleType: a.schedule_type as string,
+          scheduleTime: a.schedule_time as string, scheduleDays: a.schedule_days as string,
+          scheduleStart: a.schedule_start as string, scheduleEnd: a.schedule_end as string, scheduleInterval: a.schedule_interval as number,
         })),
         ...(data.volume_alerts || []).map((a: Record<string, unknown>) => ({
           id: `VOLUME:${a.id}`, type: "volume", symbol: a.symbol as string,
           name: `${a.symbol} 거래량알람`, condition: a.type as string,
           threshold: a.threshold as number, enabled: a.active as boolean,
           createdDate: "", notificationChannels: (a.notify_methods as string[]) || [],
-          scheduleEnabled: a.schedule_enabled as boolean, scheduleTime: a.schedule_time as string, scheduleDays: a.schedule_days as string,
+          scheduleEnabled: a.schedule_enabled as boolean, scheduleType: a.schedule_type as string,
+          scheduleTime: a.schedule_time as string, scheduleDays: a.schedule_days as string,
+          scheduleStart: a.schedule_start as string, scheduleEnd: a.schedule_end as string, scheduleInterval: a.schedule_interval as number,
         })),
       ]
 
@@ -214,13 +228,24 @@ export default function AlertsPage() {
         endpoint = "/api/alerts/volume"
       }
 
+      // Attach schedule fields to payload
+      const scheduleFields = {
+        schedule_enabled: formData.scheduleEnabled,
+        schedule_type: formData.scheduleType,
+        schedule_time: formData.scheduleType === "once" ? formData.scheduleTime : null,
+        schedule_days: formData.scheduleDays,
+        schedule_start: formData.scheduleType === "interval" ? formData.scheduleStart : null,
+        schedule_end: formData.scheduleType === "interval" ? formData.scheduleEnd : null,
+        schedule_interval: formData.scheduleType === "interval" ? parseInt(formData.scheduleInterval) : null,
+      }
+
       const response = await fetch(`${API_BASE}${endpoint}?user_id=${user?.user_id}`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify(payload),
+        body: JSON.stringify({ ...payload, ...scheduleFields }),
       })
 
       if (!response.ok) {
@@ -309,8 +334,12 @@ export default function AlertsPage() {
     const body: Record<string, unknown> = {
       notify_methods: notifyMethods,
       schedule_enabled: formData.scheduleEnabled,
-      schedule_time: formData.scheduleEnabled ? formData.scheduleTime : null,
+      schedule_type: formData.scheduleType,
+      schedule_time: formData.scheduleType === "once" ? formData.scheduleTime : null,
       schedule_days: formData.scheduleDays,
+      schedule_start: formData.scheduleType === "interval" ? formData.scheduleStart : null,
+      schedule_end: formData.scheduleType === "interval" ? formData.scheduleEnd : null,
+      schedule_interval: formData.scheduleType === "interval" ? parseInt(formData.scheduleInterval) : null,
     }
     if (selectedType === "price") {
       body.trigger_price = parseFloat(formData.threshold)
@@ -505,25 +534,85 @@ export default function AlertsPage() {
                     <Clock size={14} className="text-[#87867f]" /> 예약 실행
                   </span>
                 </label>
+
                 {formData.scheduleEnabled && (
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className={labelCls}>실행 시간</label>
-                      <input type="time" value={formData.scheduleTime}
-                        onChange={(e) => setFormData({ ...formData, scheduleTime: e.target.value })}
-                        className={selectCls} />
+                  <div className="space-y-3">
+                    {/* once / interval 선택 */}
+                    <div className="flex gap-2">
+                      {[{ v: "once", label: "특정 시간" }, { v: "interval", label: "반복 간격" }].map(opt => (
+                        <button key={opt.v} type="button"
+                          onClick={() => setFormData({ ...formData, scheduleType: opt.v })}
+                          className={`flex-1 py-2 rounded-lg text-xs font-medium transition-colors ${formData.scheduleType === opt.v ? "bg-[#141413] text-[#faf9f5]" : "bg-[#e8e6dc] text-[#5e5d59]"}`}>
+                          {opt.label}
+                        </button>
+                      ))}
                     </div>
-                    <div>
-                      <label className={labelCls}>반복</label>
-                      <select value={formData.scheduleDays}
-                        onChange={(e) => setFormData({ ...formData, scheduleDays: e.target.value })}
-                        className={selectCls}>
-                        <option value="daily">매일</option>
-                        <option value="weekdays">평일만 (월-금)</option>
-                        <option value="MON,WED,FRI">월·수·금</option>
-                        <option value="MON">매주 월요일</option>
-                      </select>
-                    </div>
+
+                    {formData.scheduleType === "once" && (
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className={labelCls}>실행 시간</label>
+                          <input type="time" value={formData.scheduleTime}
+                            onChange={(e) => setFormData({ ...formData, scheduleTime: e.target.value })}
+                            className={selectCls} />
+                        </div>
+                        <div>
+                          <label className={labelCls}>반복 요일</label>
+                          <select value={formData.scheduleDays}
+                            onChange={(e) => setFormData({ ...formData, scheduleDays: e.target.value })}
+                            className={selectCls}>
+                            <option value="daily">매일</option>
+                            <option value="weekdays">평일 (월-금)</option>
+                            <option value="MON,WED,FRI">월·수·금</option>
+                            <option value="MON">매주 월요일</option>
+                          </select>
+                        </div>
+                      </div>
+                    )}
+
+                    {formData.scheduleType === "interval" && (
+                      <div className="space-y-3">
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <label className={labelCls}>시작 시간</label>
+                            <input type="time" value={formData.scheduleStart}
+                              onChange={(e) => setFormData({ ...formData, scheduleStart: e.target.value })}
+                              className={selectCls} />
+                          </div>
+                          <div>
+                            <label className={labelCls}>종료 시간</label>
+                            <input type="time" value={formData.scheduleEnd}
+                              onChange={(e) => setFormData({ ...formData, scheduleEnd: e.target.value })}
+                              className={selectCls} />
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <label className={labelCls}>간격</label>
+                            <select value={formData.scheduleInterval}
+                              onChange={(e) => setFormData({ ...formData, scheduleInterval: e.target.value })}
+                              className={selectCls}>
+                              <option value="5">5분</option>
+                              <option value="10">10분</option>
+                              <option value="30">30분</option>
+                              <option value="60">1시간</option>
+                            </select>
+                          </div>
+                          <div>
+                            <label className={labelCls}>반복 요일</label>
+                            <select value={formData.scheduleDays}
+                              onChange={(e) => setFormData({ ...formData, scheduleDays: e.target.value })}
+                              className={selectCls}>
+                              <option value="daily">매일</option>
+                              <option value="weekdays">평일 (월-금)</option>
+                            </select>
+                          </div>
+                        </div>
+                        <p className="text-xs text-[#87867f]">
+                          예: {formData.scheduleStart} ~ {formData.scheduleEnd} 사이 {formData.scheduleInterval}분마다
+                        </p>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -587,10 +676,13 @@ export default function AlertsPage() {
                               {alert.notificationChannels.length > 0 ? alert.notificationChannels.join(", ").toUpperCase() : "PUSH"}
                             </span>
                           </p>
-                          {alert.scheduleEnabled && alert.scheduleTime && (
+                          {alert.scheduleEnabled && (
                             <p className="text-xs text-[#5e5d59] mt-1 flex items-center gap-1">
                               <Clock size={11} className="text-[#87867f]" />
-                              <span className="font-medium">{alert.scheduleTime}</span>
+                              {alert.scheduleType === "interval"
+                                ? <span className="font-medium">{alert.scheduleStart}~{alert.scheduleEnd} / {alert.scheduleInterval}분 간격</span>
+                                : <span className="font-medium">{alert.scheduleTime}</span>
+                              }
                               <span className="text-[#87867f]">({alert.scheduleDays === "daily" ? "매일" : alert.scheduleDays === "weekdays" ? "평일" : alert.scheduleDays})</span>
                             </p>
                           )}

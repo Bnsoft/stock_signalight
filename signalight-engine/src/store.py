@@ -623,6 +623,14 @@ def init_db() -> None:
                 conn.execute(f"ALTER TABLE {table} ADD COLUMN schedule_time TEXT")
             if "schedule_days" not in cols:
                 conn.execute(f"ALTER TABLE {table} ADD COLUMN schedule_days TEXT DEFAULT 'daily'")
+            if "schedule_type" not in cols:
+                conn.execute(f"ALTER TABLE {table} ADD COLUMN schedule_type TEXT DEFAULT 'once'")
+            if "schedule_start" not in cols:
+                conn.execute(f"ALTER TABLE {table} ADD COLUMN schedule_start TEXT")
+            if "schedule_end" not in cols:
+                conn.execute(f"ALTER TABLE {table} ADD COLUMN schedule_end TEXT")
+            if "schedule_interval" not in cols:
+                conn.execute(f"ALTER TABLE {table} ADD COLUMN schedule_interval INTEGER DEFAULT 5")
         conn.commit()
 
     _seed_watchlist()
