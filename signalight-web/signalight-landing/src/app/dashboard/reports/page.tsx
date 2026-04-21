@@ -53,6 +53,7 @@ export default function ReportsPage() {
   const [showForm, setShowForm] = useState(false)
   const [runningId, setRunningId] = useState<number | null>(null)
   const [expandedLog, setExpandedLog] = useState<number | null>(null)
+  const [openGroups, setOpenGroups] = useState<Set<string>>(new Set())
   const [searchResults, setSearchResults] = useState<{ symbol: string; name: string; type: string }[]>([])
   const [showDropdown, setShowDropdown] = useState(false)
   const searchTimeout = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -411,78 +412,105 @@ export default function ReportsPage() {
           </AnimateIn>
         )}
 
-        {/* History tab */}
-        {activeTab === "history" && (
-          <AnimateIn from="bottom" delay={60}>
-            <div className="bg-[#faf9f5] border border-[#f0eee6] rounded-2xl overflow-hidden shadow-[rgba(0,0,0,0.05)_0px_4px_24px]">
-              <div className="flex items-center justify-between px-5 py-4 border-b border-[#f0eee6]">
-                <p className="text-xs font-medium text-[#87867f] uppercase tracking-wide">발송 기록</p>
+        {/* History tab — 구독명별 그룹화 */}
+        {activeTab === "history" && (() => {
+          const groups = history.reduce<Record<string, HistoryEntry[]>>((acc, h) => {
+            const key = h.subscription_name || "미확인"
+            if (!acc[key]) acc[key] = []
+            acc[key].push(h)
+            return acc
+          }, {})
+
+          return (
+            <AnimateIn from="bottom" delay={60}>
+              <div className="flex items-center justify-between mb-3">
+                <p className="text-xs font-medium text-[#87867f] uppercase tracking-wide">
+                  구독별 발송 기록 ({Object.keys(groups).length}개 구독)
+                </p>
                 <button onClick={load} className="text-xs text-[#c96442] hover:underline">새로고침</button>
               </div>
+
               {history.length === 0 ? (
-                <div className="py-10 text-center text-[#87867f] text-sm">발송 기록이 없습니다</div>
+                <div className="bg-[#faf9f5] border border-[#f0eee6] rounded-2xl py-10 text-center text-[#87867f] text-sm">발송 기록이 없습니다</div>
               ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b border-[#f0eee6]">
-                        {["시간", "구독명", "채널", "상태", "내용"].map(h => (
-                          <th key={h} className="text-left px-4 py-3 text-xs font-medium text-[#87867f] uppercase tracking-wide whitespace-nowrap">{h}</th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {history.map(h => (
-                        <>
-                          <tr key={h.id} onClick={() => setExpandedLog(expandedLog === h.id ? null : h.id)}
-                            className={`border-b border-[#f0eee6]/50 cursor-pointer transition-colors ${h.status === "failed" ? "hover:bg-[#b53333]/5" : "hover:bg-[#f5f4ed]"}`}>
-                            <td className="px-4 py-3 text-xs text-[#87867f] whitespace-nowrap font-mono">
-                              {new Date(h.sent_at).toLocaleString("ko-KR", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })}
-                            </td>
-                            <td className="px-4 py-3 text-sm font-medium text-[#141413]">{h.subscription_name || "—"}</td>
-                            <td className="px-4 py-3 text-xs text-[#87867f]">{h.channels}</td>
-                            <td className="px-4 py-3">
-                              <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${h.status === "success" ? "bg-[#2d6a4f]/10 text-[#2d6a4f]" : "bg-[#b53333]/10 text-[#b53333]"}`}>
-                                {h.status === "success" ? "✓ 성공" : "✗ 실패"}
-                              </span>
-                            </td>
-                            <td className="px-4 py-3 text-xs text-[#5e5d59] max-w-xs">
-                              {h.status === "failed"
-                                ? <span className="text-[#b53333]">⚠ {(h.error_reason || "").slice(0, 50)}</span>
-                                : <span className="text-[#87867f]">{(h.content || "").replace(/<[^>]+>/g, "").slice(0, 40)}…</span>
-                              }
-                            </td>
-                          </tr>
-                          {expandedLog === h.id && (
-                            <tr key={`${h.id}-d`} className="border-b border-[#f0eee6]">
-                              <td colSpan={5} className="px-5 py-4 bg-[#f5f4ed]">
-                                {h.status === "failed" ? (
-                                  <div>
-                                    <p className="text-xs font-medium text-[#b53333] uppercase tracking-wide mb-2">오류 원인</p>
-                                    <pre className="text-xs text-[#b53333] bg-[#b53333]/5 border border-[#b53333]/20 rounded-xl px-4 py-3 whitespace-pre-wrap break-all">
-                                      {h.error_reason || "오류 메시지 없음"}
-                                    </pre>
-                                  </div>
-                                ) : (
-                                  <div>
-                                    <p className="text-xs font-medium text-[#87867f] uppercase tracking-wide mb-2">발송 내용</p>
-                                    <pre className="text-xs text-[#5e5d59] bg-white border border-[#f0eee6] rounded-xl px-4 py-3 whitespace-pre-wrap leading-relaxed">
-                                      {(h.content || "").replace(/<b>/g, "").replace(/<\/b>/g, "").replace(/<[^>]+>/g, "")}
-                                    </pre>
-                                  </div>
-                                )}
-                              </td>
-                            </tr>
-                          )}
-                        </>
-                      ))}
-                    </tbody>
-                  </table>
+                <div className="space-y-3">
+                  {Object.entries(groups).map(([subName, entries]) => {
+                    const successCount = entries.filter(e => e.status === "success").length
+                    const failCount = entries.filter(e => e.status === "failed").length
+                    const isOpen = openGroups.has(subName)
+                    const toggle = () => setOpenGroups(prev => { const next = new Set(prev); isOpen ? next.delete(subName) : next.add(subName); return next })
+
+                    return (
+                      <div key={subName} className="bg-[#faf9f5] border border-[#f0eee6] rounded-2xl overflow-hidden shadow-[rgba(0,0,0,0.05)_0px_4px_24px]">
+                        <button onClick={toggle} className="w-full flex items-center justify-between px-5 py-4 hover:bg-[#f5f4ed] transition-colors">
+                          <div className="flex items-center gap-3">
+                            <span className="font-medium text-[#141413]">{subName}</span>
+                            <span className="text-xs text-[#87867f]">{entries.length}건</span>
+                            {successCount > 0 && <span className="px-2 py-0.5 bg-[#2d6a4f]/10 text-[#2d6a4f] rounded-full text-xs">✓ {successCount}</span>}
+                            {failCount > 0 && <span className="px-2 py-0.5 bg-[#b53333]/10 text-[#b53333] rounded-full text-xs">✗ {failCount}</span>}
+                          </div>
+                          <span className="text-xs text-[#87867f]">{isOpen ? "▲" : "▼"}</span>
+                        </button>
+
+                        {isOpen && (
+                          <div className="border-t border-[#f0eee6] overflow-x-auto">
+                            <table className="w-full text-sm">
+                              <thead>
+                                <tr className="border-b border-[#f0eee6] bg-[#f5f4ed]">
+                                  {["시간", "채널", "상태", "내용"].map(h => (
+                                    <th key={h} className="text-left px-4 py-2.5 text-xs font-medium text-[#87867f] uppercase tracking-wide whitespace-nowrap">{h}</th>
+                                  ))}
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {entries.map(h => (
+                                  <>
+                                    <tr key={h.id} onClick={() => setExpandedLog(expandedLog === h.id ? null : h.id)}
+                                      className={`border-b border-[#f0eee6]/50 cursor-pointer transition-colors ${h.status === "failed" ? "hover:bg-[#b53333]/5" : "hover:bg-[#f5f4ed]"}`}>
+                                      <td className="px-4 py-2.5 text-xs text-[#87867f] whitespace-nowrap font-mono">
+                                        {new Date(h.sent_at).toLocaleString("ko-KR", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })}
+                                      </td>
+                                      <td className="px-4 py-2.5 text-xs text-[#87867f]">{h.channels}</td>
+                                      <td className="px-4 py-2.5">
+                                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${h.status === "success" ? "bg-[#2d6a4f]/10 text-[#2d6a4f]" : "bg-[#b53333]/10 text-[#b53333]"}`}>
+                                          {h.status === "success" ? "✓ 성공" : "✗ 실패"}
+                                        </span>
+                                      </td>
+                                      <td className="px-4 py-2.5 text-xs text-[#5e5d59] max-w-xs">
+                                        {h.status === "failed"
+                                          ? <span className="text-[#b53333]">⚠ {(h.error_reason || "").slice(0, 50)}</span>
+                                          : <span className="text-[#87867f]">{(h.content || "").replace(/<[^>]+>/g, "").slice(0, 40)}…</span>}
+                                      </td>
+                                    </tr>
+                                    {expandedLog === h.id && (
+                                      <tr key={`${h.id}-d`} className="border-b border-[#f0eee6]">
+                                        <td colSpan={4} className="px-5 py-4 bg-[#f5f4ed]">
+                                          {h.status === "failed" ? (
+                                            <pre className="text-xs text-[#b53333] bg-[#b53333]/5 border border-[#b53333]/20 rounded-xl px-4 py-3 whitespace-pre-wrap break-all">
+                                              {h.error_reason || "오류 메시지 없음"}
+                                            </pre>
+                                          ) : (
+                                            <pre className="text-xs text-[#5e5d59] bg-white border border-[#f0eee6] rounded-xl px-4 py-3 whitespace-pre-wrap leading-relaxed">
+                                              {(h.content || "").replace(/<b>/g,"").replace(/<\/b>/g,"").replace(/<[^>]+>/g,"")}
+                                            </pre>
+                                          )}
+                                        </td>
+                                      </tr>
+                                    )}
+                                  </>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
                 </div>
               )}
-            </div>
-          </AnimateIn>
-        )}
+            </AnimateIn>
+          )
+        })()}
       </div>
 
       <ToastContainer toasts={toasts} onRemove={removeToast} />

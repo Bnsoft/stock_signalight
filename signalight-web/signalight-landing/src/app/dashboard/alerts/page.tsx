@@ -81,6 +81,7 @@ export default function AlertsPage() {
   const [logs, setLogs] = useState<ScheduleLog[]>([])
   const [logsLoading, setLogsLoading] = useState(false)
   const [expandedLog, setExpandedLog] = useState<number | null>(null)
+  const [openGroups, setOpenGroups] = useState<Set<string>>(new Set())
   const [showAddForm, setShowAddForm] = useState(false)
   const [editingAlert, setEditingAlert] = useState<Alert | null>(null)
   const [runningId, setRunningId] = useState<string | null>(null)
@@ -769,103 +770,122 @@ export default function AlertsPage() {
           </AnimateIn>
         )}
 
-        {activeTab === "logs" && (
-          <AnimateIn from="bottom" delay={60}>
-            <div className="bg-[#faf9f5] border border-[#f0eee6] rounded-2xl overflow-hidden shadow-[rgba(0,0,0,0.05)_0px_4px_24px]">
-              <div className="flex items-center justify-between px-5 py-4 border-b border-[#f0eee6]">
-                <p className="text-xs font-medium text-[#87867f] uppercase tracking-wide">스케줄 실행 로그</p>
+        {activeTab === "logs" && (() => {
+          // 심볼별 그룹화
+          const groups = logs.reduce<Record<string, ScheduleLog[]>>((acc, log) => {
+            const key = log.symbol
+            if (!acc[key]) acc[key] = []
+            acc[key].push(log)
+            return acc
+          }, {})
+
+          return (
+            <AnimateIn from="bottom" delay={60}>
+              <div className="flex items-center justify-between mb-3">
+                <p className="text-xs font-medium text-[#87867f] uppercase tracking-wide">
+                  심볼별 실행 로그 ({Object.keys(groups).length}개 심볼)
+                </p>
                 <button onClick={loadLogs} className="text-xs text-[#c96442] hover:underline">새로고침</button>
               </div>
+
               {logsLoading ? (
                 <div className="py-10 text-center text-[#87867f] text-sm">로딩 중...</div>
               ) : logs.length === 0 ? (
-                <div className="py-10 text-center text-[#87867f] text-sm">실행 기록이 없습니다</div>
+                <div className="bg-[#faf9f5] border border-[#f0eee6] rounded-2xl py-10 text-center text-[#87867f] text-sm">실행 기록이 없습니다</div>
               ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b border-[#f0eee6]">
-                        {["시간", "심볼", "구분", "상태", "조건충족", "메시지/오류"].map(h => (
-                          <th key={h} className="text-left px-4 py-3 text-xs font-medium text-[#87867f] uppercase tracking-wide whitespace-nowrap">{h}</th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {logs.map(log => (
-                        <>
-                          <tr
-                            key={log.id}
-                            onClick={() => setExpandedLog(expandedLog === log.id ? null : log.id)}
-                            className={`border-b border-[#f0eee6]/50 transition-colors cursor-pointer ${
-                              log.status === "failed" ? "hover:bg-[#b53333]/5" : "hover:bg-[#f5f4ed]"
-                            }`}
-                          >
-                            <td className="px-4 py-3 text-xs text-[#87867f] whitespace-nowrap font-mono">
-                              {new Date(log.fired_at).toLocaleString("ko-KR", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })}
-                            </td>
-                            <td className="px-4 py-3 font-medium text-[#141413]">{log.symbol}</td>
-                            <td className="px-4 py-3 text-xs text-[#87867f]">
-                              {log.schedule_type === "manual" ? "▶ 수동" : log.schedule_type === "once" ? "⏰ 예약" : "🔁 반복"}
-                            </td>
-                            <td className="px-4 py-3">
-                              <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${
-                                log.status === "success" ? "bg-[#2d6a4f]/10 text-[#2d6a4f]" :
-                                "bg-[#b53333]/10 text-[#b53333]"
-                              }`}>
-                                {log.status === "success" ? "✓ 성공" : "✗ 실패"}
-                              </span>
-                            </td>
-                            <td className="px-4 py-3 text-center">
-                              {log.status === "success" ? (
-                                <span className={`text-xs font-medium ${log.triggered ? "text-[#c96442]" : "text-[#87867f]"}`}>
-                                  {log.triggered ? "🚨 충족" : "✅ 미충족"}
-                                </span>
-                              ) : <span className="text-[#b0aea5]">—</span>}
-                            </td>
-                            <td className="px-4 py-3 text-xs text-[#5e5d59]">
-                              {log.status === "failed" ? (
-                                <span className="text-[#b53333] font-medium flex items-center gap-1">
-                                  ⚠ {log.error_reason ? log.error_reason.slice(0, 50) + (log.error_reason.length > 50 ? "…" : "") : "알 수 없는 오류"}
-                                </span>
-                              ) : log.message_sent ? (
-                                <span className="text-[#87867f]">
-                                  {log.message_sent.replace(/<[^>]+>/g, "").slice(0, 40)}…
-                                </span>
-                              ) : "—"}
-                            </td>
-                          </tr>
+                <div className="space-y-3">
+                  {Object.entries(groups).map(([symbol, groupLogs]) => {
+                    const successCount = groupLogs.filter(l => l.status === "success").length
+                    const failCount = groupLogs.filter(l => l.status === "failed").length
+                    const triggeredCount = groupLogs.filter(l => l.triggered).length
+                    const isOpen = expandedLog === -parseInt(symbol.charCodeAt(0).toString() + symbol.length)
+                    const groupKey = symbol + "_group"
+                    const isGroupOpen = openGroups.has(symbol)
+                    return (
+                      <div key={symbol} className="bg-[#faf9f5] border border-[#f0eee6] rounded-2xl overflow-hidden shadow-[rgba(0,0,0,0.05)_0px_4px_24px]">
+                        {/* 그룹 헤더 */}
+                        <button
+                          onClick={() => setOpenGroups(prev => { const next = new Set(prev); isGroupOpen ? next.delete(symbol) : next.add(symbol); return next })}
+                          className="w-full flex items-center justify-between px-5 py-4 hover:bg-[#f5f4ed] transition-colors"
+                        >
+                          <div className="flex items-center gap-3">
+                            <span className="font-medium text-[#141413]">{symbol}</span>
+                            <span className="text-xs text-[#87867f]">{groupLogs.length}건</span>
+                            {successCount > 0 && <span className="px-2 py-0.5 bg-[#2d6a4f]/10 text-[#2d6a4f] rounded-full text-xs">✓ {successCount}</span>}
+                            {failCount > 0 && <span className="px-2 py-0.5 bg-[#b53333]/10 text-[#b53333] rounded-full text-xs">✗ {failCount}</span>}
+                            {triggeredCount > 0 && <span className="px-2 py-0.5 bg-[#c96442]/10 text-[#c96442] rounded-full text-xs">🚨 {triggeredCount}</span>}
+                          </div>
+                          <span className="text-xs text-[#87867f]">{isGroupOpen ? "▲" : "▼"}</span>
+                        </button>
 
-                          {/* 확장 상세 패널 */}
-                          {expandedLog === log.id && (
-                            <tr key={`${log.id}-detail`} className="border-b border-[#f0eee6]">
-                              <td colSpan={6} className="px-5 py-4 bg-[#f5f4ed]">
-                                {log.status === "failed" ? (
-                                  <div>
-                                    <p className="text-xs font-medium text-[#b53333] uppercase tracking-wide mb-2">오류 원인</p>
-                                    <pre className="text-xs text-[#b53333] bg-[#b53333]/5 border border-[#b53333]/20 rounded-xl px-4 py-3 whitespace-pre-wrap break-all leading-relaxed">
-                                      {log.error_reason || "오류 메시지가 기록되지 않았습니다."}
-                                    </pre>
-                                  </div>
-                                ) : log.message_sent ? (
-                                  <div>
-                                    <p className="text-xs font-medium text-[#87867f] uppercase tracking-wide mb-2">발송된 메시지</p>
-                                    <pre className="text-xs text-[#5e5d59] bg-white border border-[#f0eee6] rounded-xl px-4 py-3 whitespace-pre-wrap leading-relaxed">
-                                      {log.message_sent.replace(/<b>/g, "").replace(/<\/b>/g, "").replace(/<[^>]+>/g, "")}
-                                    </pre>
-                                  </div>
-                                ) : null}
-                              </td>
-                            </tr>
-                          )}
-                        </>
-                      ))}
-                    </tbody>
-                  </table>
+                        {/* 그룹 내 로그 테이블 */}
+                        {isGroupOpen && (
+                          <div className="border-t border-[#f0eee6] overflow-x-auto">
+                            <table className="w-full text-sm">
+                              <thead>
+                                <tr className="border-b border-[#f0eee6] bg-[#f5f4ed]">
+                                  {["시간", "구분", "상태", "조건충족", "메시지/오류"].map(h => (
+                                    <th key={h} className="text-left px-4 py-2.5 text-xs font-medium text-[#87867f] uppercase tracking-wide whitespace-nowrap">{h}</th>
+                                  ))}
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {groupLogs.map(log => (
+                                  <>
+                                    <tr key={log.id}
+                                      onClick={() => setExpandedLog(expandedLog === log.id ? null : log.id)}
+                                      className={`border-b border-[#f0eee6]/50 cursor-pointer transition-colors ${log.status === "failed" ? "hover:bg-[#b53333]/5" : "hover:bg-[#f5f4ed]"}`}>
+                                      <td className="px-4 py-2.5 text-xs text-[#87867f] whitespace-nowrap font-mono">
+                                        {new Date(log.fired_at).toLocaleString("ko-KR", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })}
+                                      </td>
+                                      <td className="px-4 py-2.5 text-xs text-[#87867f]">
+                                        {log.schedule_type === "manual" ? "▶ 수동" : log.schedule_type === "once" ? "⏰ 예약" : "🔁 반복"}
+                                      </td>
+                                      <td className="px-4 py-2.5">
+                                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${log.status === "success" ? "bg-[#2d6a4f]/10 text-[#2d6a4f]" : "bg-[#b53333]/10 text-[#b53333]"}`}>
+                                          {log.status === "success" ? "✓ 성공" : "✗ 실패"}
+                                        </span>
+                                      </td>
+                                      <td className="px-4 py-2.5 text-center">
+                                        {log.status === "success"
+                                          ? <span className={`text-xs font-medium ${log.triggered ? "text-[#c96442]" : "text-[#87867f]"}`}>{log.triggered ? "🚨 충족" : "✅ 미충족"}</span>
+                                          : <span className="text-[#b0aea5]">—</span>}
+                                      </td>
+                                      <td className="px-4 py-2.5 text-xs text-[#5e5d59] max-w-xs">
+                                        {log.status === "failed"
+                                          ? <span className="text-[#b53333]">⚠ {(log.error_reason || "").slice(0, 50)}</span>
+                                          : <span className="text-[#87867f]">{(log.message_sent || "").replace(/<[^>]+>/g, "").slice(0, 40)}…</span>}
+                                      </td>
+                                    </tr>
+                                    {expandedLog === log.id && (
+                                      <tr key={`${log.id}-d`} className="border-b border-[#f0eee6]">
+                                        <td colSpan={5} className="px-5 py-4 bg-[#f5f4ed]">
+                                          {log.status === "failed" ? (
+                                            <pre className="text-xs text-[#b53333] bg-[#b53333]/5 border border-[#b53333]/20 rounded-xl px-4 py-3 whitespace-pre-wrap break-all">
+                                              {log.error_reason || "오류 메시지 없음"}
+                                            </pre>
+                                          ) : (
+                                            <pre className="text-xs text-[#5e5d59] bg-white border border-[#f0eee6] rounded-xl px-4 py-3 whitespace-pre-wrap leading-relaxed">
+                                              {(log.message_sent || "").replace(/<b>/g,"").replace(/<\/b>/g,"").replace(/<[^>]+>/g,"")}
+                                            </pre>
+                                          )}
+                                        </td>
+                                      </tr>
+                                    )}
+                                  </>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
                 </div>
               )}
-            </div>
-          </AnimateIn>
-        )}
+            </AnimateIn>
+          )
+        })()}
 
         {activeTab === "alerts" && <AnimateIn from="bottom" delay={120}>
           <div className="space-y-3">
