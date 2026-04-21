@@ -594,8 +594,16 @@ async def run_alert_now(alert_id: int, alert_category: str):
 
         await send_message(tg_text)
 
+        status = "triggered" if triggered else "not_triggered"
+        db_store.save_schedule_run_log(
+            alert_id=alert_id, alert_category=alert_category.upper(),
+            symbol=symbol, schedule_type="manual",
+            status="success", triggered=bool(triggered),
+            message_sent=tg_text[:500],
+        )
+
         return {
-            "status": "triggered" if triggered else "not_triggered",
+            "status": status,
             "triggered_count": len(triggered),
             "snapshot": snapshot,
             "triggered_alerts": [ua["message"] for ua in triggered],
@@ -603,6 +611,11 @@ async def run_alert_now(alert_id: int, alert_category: str):
     except HTTPException:
         raise
     except Exception as e:
+        db_store.save_schedule_run_log(
+            alert_id=alert_id, alert_category=alert_category.upper(),
+            symbol=locals().get("symbol", "?"), schedule_type="manual",
+            status="failed", error_reason=str(e)[:300],
+        )
         raise HTTPException(status_code=500, detail=str(e))
 
 

@@ -797,7 +797,7 @@ export default function AlertsPage() {
                           </td>
                           <td className="px-4 py-3 font-medium text-[#141413]">{log.symbol}</td>
                           <td className="px-4 py-3 text-xs text-[#87867f]">
-                            {log.schedule_type === "once" ? "⏰ 특정시간" : `🔁 ${log.schedule_type}`}
+                            {log.schedule_type === "manual" ? "▶ 수동실행" : log.schedule_type === "once" ? "⏰ 특정시간" : `🔁 반복`}
                           </td>
                           <td className="px-4 py-3">
                             <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${
